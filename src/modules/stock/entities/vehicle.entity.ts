@@ -1,6 +1,14 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+// src/modules/stock/entities/vehicle.entity.ts
+import { Entity, Column, PrimaryGeneratedColumn, OneToMany } from 'typeorm';
+import { TestDrive } from '../../test-drive/entities/test-drive.entity';
 
-@Entity('vehicles')
+export enum VehicleStatus {
+  AVAILABLE = 'available',
+  UNAVAILABLE = 'unavailable',
+  IN_USE = 'in_use'
+}
+
+@Entity()
 export class Vehicle {
   @PrimaryGeneratedColumn()
   id: number;
@@ -9,13 +17,7 @@ export class Vehicle {
   vehicleCode: string;
 
   @Column()
-  model: string;
-
-  @Column({ length: 17, nullable: true })
   vinNumber: string;
-
-  @Column({ nullable: true })
-  color: string;
 
   @Column({ nullable: true })
   frontMotor: string;
@@ -23,16 +25,41 @@ export class Vehicle {
   @Column({ nullable: true })
   batteryNumber: string;
 
+  @Column()
+  model: string;
+
+  @Column({ nullable: true })
+  color: string;
+
   @Column({
     type: 'enum',
-    enum: ['active', 'inactive'],
-    default: 'active',
+    enum: VehicleStatus,
+    default: VehicleStatus.AVAILABLE
   })
-  status: string;
+  status: VehicleStatus;
 
-  @CreateDateColumn()
+  @Column({ nullable: true })
+  dealerCode: string;
+
+  @Column({ nullable: true })
+  dealerName: string;
+
+  @Column({ nullable: true })
+  carType: string;
+
+  @Column({ type: 'datetime', nullable: true })
+  allocationDate: Date;
+
+  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
+  price: number;
+
+  // เพิ่มความสัมพันธ์กับ TestDrive
+  @OneToMany(() => TestDrive, testDrive => testDrive.vehicle)
+  testDrives: TestDrive[];
+
+  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' }) 
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP', onUpdate: 'CURRENT_TIMESTAMP' })
   updatedAt: Date;
 }

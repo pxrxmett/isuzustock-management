@@ -3,18 +3,25 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { getDatabaseConfig } from './database/database.config';
 import { StockModule } from './modules/stock/stock.module';
+import { TestDriveModule } from './modules/test-drive/test-drive.module';
+import { AuthModule } from './modules/auth/auth.module';
+import { StaffModule } from './modules/staff/staff.module'; // เพิ่มบรรทัดนี้
 
 @Module({
-  imports: [
-    ConfigModule.forRoot({
-      isGlobal: true,
-    }),
-    TypeOrmModule.forRootAsync({
-      imports: [ConfigModule],
-      useFactory: getDatabaseConfig,
-      inject: [ConfigService],
-    }),
-    StockModule,
-  ],
+ imports: [
+   ConfigModule.forRoot({
+     isGlobal: true,
+   }),
+   TypeOrmModule.forRootAsync({
+     imports: [ConfigModule],
+     useFactory: getDatabaseConfig,
+     inject: [ConfigService],
+   }),
+   AuthModule,
+   StockModule, 
+   TestDriveModule,
+   StaffModule, // เพิ่มบรรทัดนี้
+ ],
 })
 export class AppModule {}
+

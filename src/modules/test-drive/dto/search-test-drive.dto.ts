@@ -1,0 +1,36 @@
+// src/modules/test-drive/dto/search-test-drive.dto.ts
+import { IsOptional, IsString, IsEnum, IsDate } from 'class-validator';
+import { Type } from 'class-transformer';
+import { TestDriveStatus } from '../entities/test-drive.entity';
+
+export class SearchTestDriveDto {
+  @IsOptional()
+  @IsString()
+  customer_name?: string;
+
+  @IsOptional()
+  @IsString()
+  customer_phone?: string;
+
+  @IsOptional()
+  @IsString()
+  vehicleCode?: string;
+
+  @IsOptional()
+  @IsString()
+  responsible_staff?: string;
+
+  @IsOptional()
+  @IsEnum(TestDriveStatus)
+  status?: TestDriveStatus;
+
+  @IsOptional()
+  @Type(() => Date)
+  @IsDate()
+  start_date?: Date;
+
+  @IsOptional()
+  @Type(() => Date)
+  @IsDate()
+  end_date?: Date;
+}
