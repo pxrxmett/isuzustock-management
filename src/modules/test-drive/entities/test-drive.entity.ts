@@ -1,5 +1,6 @@
 import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, JoinColumn } from 'typeorm';
 import { Vehicle } from '../../stock/entities/vehicle.entity';
+import { Staff } from '../../staff/entities/staff.entity';
 
 export enum TestDriveStatus {
   PENDING = 'pending',     // รอดำเนินการ
@@ -45,7 +46,11 @@ export class TestDrive {
   duration: number;
 
   @Column()
-  responsible_staff: string;
+  responsible_staff: number;
+
+  @ManyToOne(() => Staff)
+  @JoinColumn({ name: 'responsible_staff' })
+  staff: Staff;
 
   @Column({
     type: 'enum',

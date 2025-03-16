@@ -1,9 +1,9 @@
-// src/modules/test-drive/services/test-drive.service.ts
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between } from 'typeorm';
 import { TestDrive, TestDriveStatus } from '../entities/test-drive.entity';
 import { Vehicle, VehicleStatus } from '../../stock/entities/vehicle.entity';
+import { Staff } from '../../staff/entities/staff.entity';
 import { CreateTestDriveDto } from '../dto/create-test-drive.dto';
 import { UpdateTestDriveDto } from '../dto/update-test-drive.dto';
 import { SearchTestDriveDto } from '../dto/search-test-drive.dto';
@@ -18,6 +18,8 @@ export class TestDriveService {
     private testDriveRepository: Repository<TestDrive>,
     @InjectRepository(Vehicle)
     private vehicleRepository: Repository<Vehicle>,
+    @InjectRepository(Staff)
+    private staffRepository: Repository<Staff>,
   ) {}
 
   async create(createDto: CreateTestDriveDto) {
@@ -58,7 +60,15 @@ export class TestDriveService {
 
   async findAll(searchDto: SearchTestDriveDto) {
     const query = this.testDriveRepository.createQueryBuilder('td')
-      .leftJoinAndSelect('td.vehicle', 'vehicle');
+      .leftJoinAndSelect('td.vehicle', 'vehicle')
+      .leftJoinAndSelect('td.staff', 'staff')
+      .select([
+        'td',
+        'vehicle',
+        'staff.id',
+        'staff.first_name',
+        'staff.last_name'
+      ]);
 
     if (searchDto.customer_name) {
       query.andWhere('td.customer_name ILIKE :name', { 
@@ -91,20 +101,44 @@ export class TestDriveService {
       });
     }
 
-    return query.getMany();
+    const testDrives = await query.getMany();
+
+    return testDrives.map(td => ({
+      id: td.id,
+      start_time: td.start_time,
+      created_at: td.created_at,
+      customer_name: td.customer_name,
+      customer_phone: td.customer_phone,
+      duration: td.duration,
+      status: td.status,
+      staff_name: td.staff ? `${td.staff.first_name} ${td.staff.last_name}` : null,
+      vehicle: td.vehicle
+    }));
   }
 
   async findOne(id: number) {
     const testDrive = await this.testDriveRepository.findOne({
       where: { id },
-      relations: ['vehicle']
+      relations: ['vehicle', 'staff'],
+      select: {
+        staff: {
+          id: true,
+          first_name: true,
+          last_name: true
+        }
+      }
     });
 
     if (!testDrive) {
       throw new NotFoundException('ไม่พบรายการทดลองขับ');
     }
 
-    return testDrive;
+    return {
+      ...testDrive,
+      staff_name: testDrive.staff ? 
+        `${testDrive.staff.first_name} ${testDrive.staff.last_name}` : 
+        null
+    };
   }
 
   async update(id: number, updateDto: UpdateTestDriveDto) {
@@ -131,7 +165,6 @@ export class TestDriveService {
       throw new BadRequestException('ไม่สามารถยกเลิกรายการที่ไม่ได้อยู่ในสถานะรอดำเนินการ');
     }
 
-    // อัพเดทสถานะรถให้กลับมาพร้อมใช้งาน
     await this.vehicleRepository.update(testDrive.vehicle_id, {
       status: VehicleStatus.AVAILABLE
     });
@@ -143,10 +176,10 @@ export class TestDriveService {
   async exportReport(exportDto: ExportReportDto) {
     const testDrives = await this.findAll(exportDto);
     
-    // แปลงข้อมูลสำหรับ Excel
     const reportData = testDrives.map(td => ({
       'หมายเลขการจอง': td.id,
       'วันและเวลา': new Date(td.start_time).toLocaleString('th-TH'),
+      'พนักงานขาย': td.staff_name || 'ไม่ระบุ',
       'ลูกค้า': td.customer_name,
       'เบอร์โทร': td.customer_phone,
       'รถทดสอบ': `${td.vehicle.model} (${td.vehicle.vehicleCode})`,
@@ -154,14 +187,13 @@ export class TestDriveService {
       'สถานะ': this.getStatusText(td.status)
     }));
 
-    // สร้าง Excel
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(reportData);
 
-    // ปรับความกว้างคอลัมน์
     const colWidths = [
       { wch: 15 }, // หมายเลขการจอง
       { wch: 20 }, // วันและเวลา
+      { wch: 20 }, // พนักงานขาย
       { wch: 30 }, // ลูกค้า
       { wch: 15 }, // เบอร์โทร
       { wch: 30 }, // รถทดสอบ

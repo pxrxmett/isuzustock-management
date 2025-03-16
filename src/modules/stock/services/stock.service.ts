@@ -1,11 +1,14 @@
 // stock.service.ts
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Vehicle } from '../entities/vehicle.entity';
+import { FileUpload } from '../entities/file-upload.entity';
 import { CreateVehicleDto } from '../dto/create-vehicle.dto';
 import * as ExcelJS from 'exceljs';
 import { Express } from 'express';
+import * as crypto from 'crypto';
+
 
 type ExcelRow = {
   'No': string;
@@ -26,6 +29,8 @@ export class StockService {
   constructor(
     @InjectRepository(Vehicle)
     private vehicleRepository: Repository<Vehicle>,
+    @InjectRepository(FileUpload)
+    private fileUploadRepository: Repository<FileUpload>,
   ) {}
 
   async createVehicle(createVehicleDto: CreateVehicleDto): Promise<Vehicle> {
@@ -160,24 +165,72 @@ export class StockService {
     return await this.vehicleRepository.remove(vehicle);
   }
 
+  // เพิ่มฟังก์ชันใหม่สำหรับคำนวณ hash ของไฟล์
+  private calculateFileHash(buffer: Buffer): string {
+    return crypto.createHash('sha256').update(buffer).digest('hex');
+  }
+
+  // ตรวจสอบเฉพาะ VIN Number ที่ซ้ำกัน
+  private async checkDuplicateVin(vinNumber: string): Promise<boolean> {
+    const vehicle = await this.vehicleRepository.findOne({
+      where: { vinNumber }
+    });
+    return !!vehicle;
+  }
+
   async processExcelFile(file: Express.Multer.File) {
     try {
+      // คำนวณ hash ของไฟล์
+      const fileHash = this.calculateFileHash(file.buffer);
+
+      // ตรวจสอบไฟล์ซ้ำโดยใช้ hash
+      const existingFile = await this.fileUploadRepository.findOne({
+        where: { fileHash }
+      });
+
+      if (existingFile) {
+        throw new ConflictException('ไฟล์นี้เคยอัพโหลดแล้ว ไม่สามารถอัพโหลดไฟล์ซ้ำได้');
+      }
+
+      // ตรวจสอบชื่อไฟล์ซ้ำ (ทางเลือกเพิ่มเติม)
+      const existingFileByName = await this.fileUploadRepository.findOne({
+        where: { fileName: file.originalname }
+      });
+
+      if (existingFileByName) {
+        throw new ConflictException('มีไฟล์ชื่อนี้อยู่ในระบบแล้ว กรุณาเปลี่ยนชื่อไฟล์');
+      }
+
+      // สร้างบันทึกการอัพโหลดไฟล์ใหม่
+      const fileUpload = this.fileUploadRepository.create({
+        fileName: file.originalname,
+        fileSize: file.size,
+        mimeType: file.mimetype,
+        fileHash: fileHash,
+        isProcessed: false
+      });
+
+      await this.fileUploadRepository.save(fileUpload);
+
       const workbook = new ExcelJS.Workbook();
       await workbook.xlsx.load(file.buffer);
       const worksheet = workbook.getWorksheet(1);
 
       if (!worksheet) {
+        await this.updateFileUploadStatus(fileUpload.id, 0, ['Excel file does not contain any worksheets'], true);
         throw new BadRequestException('Excel file does not contain any worksheets');
       }
 
       const data: ExcelRow[] = [];
       const errors: string[] = [];
+      const duplicateVins: string[] = [];
 
       // Get headers from first row
       const firstRow = worksheet.getRow(1);
       const headers = firstRow.values as string[];
 
       if (!headers || headers.length === 0) {
+        await this.updateFileUploadStatus(fileUpload.id, 0, ['Excel file does not contain headers'], true);
         throw new BadRequestException('Excel file does not contain headers');
       }
 
@@ -194,6 +247,12 @@ export class StockService {
       );
 
       if (missingHeaders.length > 0) {
+        await this.updateFileUploadStatus(
+          fileUpload.id,
+          0,
+          [`Missing required headers: ${missingHeaders.join(', ')}`],
+          true
+        );
         throw new BadRequestException(
           `Missing required headers: ${missingHeaders.join(', ')}`
         );
@@ -233,6 +292,14 @@ export class StockService {
           if (!row['VIN No.'] || row['VIN No.'].length !== 17) {
             throw new Error(`Invalid VIN Number in row ${data.indexOf(row) + 2}`);
           }
+
+          // ตรวจสอบ VIN ซ้ำในฐานข้อมูล
+          const isDuplicateVin = await this.checkDuplicateVin(row['VIN No.'].trim());
+          if (isDuplicateVin) {
+            duplicateVins.push(row['VIN No.'].trim());
+            throw new Error(`VIN Number ${row['VIN No.'].trim()} already exists in database (row ${data.indexOf(row) + 2})`);
+          }
+
           // Generate unique vehicleCode
           const lastVehicle = await this.vehicleRepository.findOne({
             where: { dealerCode: row['Dealer Code'] },
@@ -285,16 +352,121 @@ export class StockService {
         }
       }
 
+      // อัพเดทผลลัพธ์ลงในเอนทิตี FileUpload
+      await this.updateFileUploadStatus(
+        fileUpload.id,
+        results.length,
+        errors.length > 0 ? errors : undefined,
+        true
+      );
+
+      // หากพบ VIN ซ้ำเป็นจำนวนมาก ให้รวมข้อความแจ้งเตือน
+      let duplicateVinMessage = '';
+      if (duplicateVins.length > 0) {
+        duplicateVinMessage = `\nพบ VIN Number ซ้ำในระบบ: ${
+          duplicateVins.length > 10 
+            ? `${duplicateVins.slice(0, 10).join(', ')} และอีก ${duplicateVins.length - 10} รายการ` 
+            : duplicateVins.join(', ')
+        }`;
+      }
+
       return {
         totalRecords: data.length,
         processedRecords: results.length,
-        success: results.length > 0 && errors.length === 0,
-        errors: errors.length > 0 ? errors : undefined
+        success: results.length > 0,
+        errors: errors.length > 0 ? errors : undefined,
+        fileId: fileUpload.id,
+        duplicateVinCount: duplicateVins.length,
+        message: duplicateVins.length > 0 
+          ? `นำเข้าข้อมูลสำเร็จ ${results.length} รายการ, ไม่สำเร็จ ${errors.length} รายการ${duplicateVinMessage}`
+          : `นำเข้าข้อมูลสำเร็จ ${results.length} รายการ, ไม่สำเร็จ ${errors.length} รายการ`
       };
     } catch (error) {
+      // จัดการกับข้อผิดพลาดที่เกิดจากการตรวจสอบไฟล์ซ้ำ
+      if (error instanceof ConflictException) {
+        throw error;
+      }
       throw new BadRequestException(
         `Failed to process Excel file: ${error.message}`
       );
     }
+  }
+
+  // เพิ่มฟังก์ชันสำหรับอัพเดทสถานะและข้อมูลการอัพโหลดไฟล์
+  private async updateFileUploadStatus(
+    fileId: number,
+    recordsImported: number,
+    importErrors?: string[],
+    isProcessed: boolean = false
+  ) {
+    const fileUpload = await this.fileUploadRepository.findOne({
+      where: { id: fileId }
+    });
+
+    if (fileUpload) {
+      fileUpload.recordsImported = recordsImported;
+      fileUpload.importErrors = importErrors ? JSON.stringify(importErrors) : null;
+      fileUpload.isProcessed = isProcessed;
+      
+      if (isProcessed) {
+        fileUpload.processedAt = new Date();
+      }
+      
+      await this.fileUploadRepository.save(fileUpload);
+    }
+  }
+
+  // เพิ่มฟังก์ชันสำหรับดูประวัติการอัพโหลดไฟล์
+  async getFileUploadHistory(page: number = 1, limit: number = 10) {
+    const [uploads, total] = await this.fileUploadRepository.findAndCount({
+      order: { uploadedAt: 'DESC' },
+      skip: (page - 1) * limit,
+      take: limit
+    });
+
+    return {
+      data: uploads.map(upload => ({
+        id: upload.id,
+        fileName: upload.fileName,
+        fileSize: this.formatFileSize(upload.fileSize),
+        uploadedAt: upload.uploadedAt,
+        processedAt: upload.processedAt,
+        status: upload.isProcessed ? 'ประมวลผลแล้ว' : 'รอการประมวลผล',
+        recordsImported: upload.recordsImported,
+        hasErrors: upload.importErrors !== null
+      })),
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit)
+      }
+    };
+  }
+
+  // ฟังก์ชันช่วยจัดรูปแบบขนาดไฟล์
+  private formatFileSize(bytes: number): string {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1048576) return (bytes / 1024).toFixed(2) + ' KB';
+    return (bytes / 1048576).toFixed(2) + ' MB';
+  }
+
+  // ฟังก์ชันดูรายละเอียดข้อผิดพลาดการอัพโหลด
+  async getFileUploadErrors(fileId: number) {
+    const fileUpload = await this.fileUploadRepository.findOne({
+      where: { id: fileId }
+    });
+
+    if (!fileUpload) {
+      throw new NotFoundException(`File upload #${fileId} not found`);
+    }
+
+    return {
+      fileName: fileUpload.fileName,
+      uploadedAt: fileUpload.uploadedAt,
+      processedAt: fileUpload.processedAt,
+      recordsImported: fileUpload.recordsImported,
+      errors: fileUpload.importErrors ? JSON.parse(fileUpload.importErrors) : []
+    };
   }
 }
