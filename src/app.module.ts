@@ -5,7 +5,8 @@ import { getDatabaseConfig } from './database/database.config';
 import { StockModule } from './modules/stock/stock.module';
 import { TestDriveModule } from './modules/test-drive/test-drive.module';
 import { AuthModule } from './modules/auth/auth.module';
-import { StaffModule } from './modules/staff/staff.module'; // เพิ่มบรรทัดนี้
+import { StaffModule } from './modules/staff/staff.module';
+import { LineIntegrationModule } from './modules/line-integration/line-integration.module'; // เพิ่มบรรทัดนี้
 
 @Module({
  imports: [
@@ -20,8 +21,8 @@ import { StaffModule } from './modules/staff/staff.module'; // เพิ่ม�
    AuthModule,
    StockModule, 
    TestDriveModule,
-   StaffModule, // เพิ่มบรรทัดนี้
+   StaffModule,
+   LineIntegrationModule, // เพิ่มบรรทัดนี้
  ],
 })
 export class AppModule {}
-

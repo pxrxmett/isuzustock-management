@@ -1,67 +1,67 @@
-import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, JoinColumn } from 'typeorm';
-import { Vehicle } from '../../stock/entities/vehicle.entity';
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
+} from 'typeorm';
 import { Staff } from '../../staff/entities/staff.entity';
-
-export enum TestDriveStatus {
-  PENDING = 'pending',     // รอดำเนินการ
-  ONGOING = 'ongoing',     // กำลังทดลองขับ
-  COMPLETED = 'completed', // เสร็จสิ้น
-  CANCELLED = 'cancelled', // ยกเลิก
-}
-
+import { Vehicle } from '../../stock/entities/vehicle.entity';
 @Entity('test_drives')
 export class TestDrive {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @ManyToOne(() => Vehicle, vehicle => vehicle.testDrives)
+  @Column({ name: 'vehicle_id' })
+  vehicleId: number;
+
+  @ManyToOne(() => Vehicle)
   @JoinColumn({ name: 'vehicle_id' })
   vehicle: Vehicle;
 
-  @Column()
-  vehicle_id: number;
+  @Column({
+    type: 'enum',
+    enum: ['pending', 'ongoing', 'completed', 'cancelled'],
+    default: 'pending',
+  })
+  status: string;
 
-  @Column()
-  customer_name: string;
+  @Column({ name: 'customer_name' })
+  customerName: string;
 
-  @Column()
-  customer_phone: string;
+  @Column({ name: 'customer_phone' })
+  customerPhone: string;
 
-  @Column({ type: 'timestamp' })
-  start_time: Date;
-
-  @Column({ type: 'timestamp' })
-  expected_end_time: Date;
-
-  @Column({ type: 'timestamp', nullable: true })
-  actual_end_time: Date;
-
-  @Column({ nullable: true })
-  test_route: string;
+  @Column({ name: 'test_route', nullable: true })
+  testRoute: string;
 
   @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
   distance: number;
 
-  @Column({ type: 'integer' })
+  @Column()
   duration: number;
 
-  @Column()
-  responsible_staff: number;
+  @Column({ name: 'start_time' })
+  startTime: Date;
 
-  @ManyToOne(() => Staff)
+  @Column({ name: 'expected_end_time' })
+  expectedEndTime: Date;
+
+  @Column({ name: 'actual_end_time', nullable: true })
+  actualEndTime: Date;
+
+  @Column({ name: 'responsible_staff' })
+  responsibleStaffId: string;
+
+  @ManyToOne(() => Staff, (staff) => staff.testDrives)
   @JoinColumn({ name: 'responsible_staff' })
   staff: Staff;
 
-  @Column({
-    type: 'enum',
-    enum: TestDriveStatus,
-    default: TestDriveStatus.PENDING,
-  })
-  status: TestDriveStatus;
+  @CreateDateColumn({ name: 'created_at' })
+  createdAt: Date;
 
-  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
-  created_at: Date;
-
-  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP', onUpdate: 'CURRENT_TIMESTAMP' })
-  updated_at: Date;
+  @UpdateDateColumn({ name: 'updated_at' })
+  updatedAt: Date;
 }

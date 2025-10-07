@@ -1,52 +1,87 @@
-// src/modules/test-drive/dto/update-test-drive.dto.ts
-import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsDate, IsEnum, IsString, IsNumber } from 'class-validator';
+import { IsOptional, IsString, IsDate, IsNumber, IsEnum } from 'class-validator';
 import { Type } from 'class-transformer';
-import { TestDriveStatus } from '../entities/test-drive.entity';
+import { ApiPropertyOptional } from '@nestjs/swagger';
+import { TestDriveStatus } from '../entities/test-drive-status.enum'; // แก้ไขการนำเข้า TestDriveStatus
 
 export class UpdateTestDriveDto {
-  @ApiPropertyOptional({ description: 'เวลาเริ่มทดลองขับ' })
+  @ApiPropertyOptional({
+    example: 'ทดสอบ ระบบ',
+    description: 'ชื่อลูกค้า'
+  })
+  @IsOptional()
+  @IsString()
+  customer_name?: string;
+
+  @ApiPropertyOptional({
+    example: '0812345678',
+    description: 'เบอร์โทรลูกค้า'
+  })
+  @IsOptional()
+  @IsString()
+  customer_phone?: string;
+
+  @ApiPropertyOptional({
+    example: '2023-01-15T10:00:00Z',
+    description: 'เวลาเริ่มทดลองขับ'
+  })
   @IsOptional()
   @Type(() => Date)
   @IsDate()
   start_time?: Date;
 
-  @ApiPropertyOptional({ description: 'เวลาสิ้นสุดที่คาดว่าจะใช้' })
+  @ApiPropertyOptional({
+    example: '2023-01-15T11:00:00Z',
+    description: 'เวลาสิ้นสุดที่คาดหวัง'
+  })
   @IsOptional()
   @Type(() => Date)
   @IsDate()
   expected_end_time?: Date;
 
-  @ApiPropertyOptional({ description: 'เวลาสิ้นสุดจริง' })
+  @ApiPropertyOptional({
+    example: '2023-01-15T10:45:00Z',
+    description: 'เวลาสิ้นสุดจริง'
+  })
   @IsOptional()
   @Type(() => Date)
   @IsDate()
   actual_end_time?: Date;
 
-  @ApiPropertyOptional({ description: 'เส้นทางที่ใช้ทดสอบ' })
+  @ApiPropertyOptional({
+    example: 'เส้นทางรอบโรงงาน',
+    description: 'เส้นทางทดสอบ'
+  })
   @IsOptional()
   @IsString()
   test_route?: string;
 
-  @ApiPropertyOptional({ description: 'ระยะทางที่ใช้ (กม.)' })
+  @ApiPropertyOptional({
+    example: 10.5,
+    description: 'ระยะทาง (กม.)'
+  })
   @IsOptional()
   @IsNumber()
   distance?: number;
 
-  @ApiPropertyOptional({ description: 'ระยะเวลาที่ใช้ (นาที)' })
+  @ApiPropertyOptional({
+    example: 60,
+    description: 'ระยะเวลา (นาที)'
+  })
   @IsOptional()
   @IsNumber()
   duration?: number;
 
-  @ApiPropertyOptional({ description: 'พนักงานผู้รับผิดชอบ' })
+  @ApiPropertyOptional({
+    example: 1,
+    description: 'รหัสพนักงานผู้รับผิดชอบ'
+  })
   @IsOptional()
-  @IsString()
-  responsible_staff?: string;
+  @IsNumber()
+  responsible_staff?: number;
 
   @ApiPropertyOptional({
-    description: 'สถานะการทดลองขับ',
     enum: TestDriveStatus,
-    example: TestDriveStatus.COMPLETED,
+    description: 'สถานะการทดลองขับ'
   })
   @IsOptional()
   @IsEnum(TestDriveStatus)

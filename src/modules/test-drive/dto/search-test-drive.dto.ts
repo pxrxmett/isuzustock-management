@@ -1,12 +1,12 @@
 // src/modules/test-drive/dto/search-test-drive.dto.ts
 import { IsOptional, IsString, IsEnum, IsDate } from 'class-validator';
 import { Type } from 'class-transformer';
-import { TestDriveStatus } from '../entities/test-drive.entity';
+import { TestDriveStatus } from '../entities/test-drive-status.enum'; // แก้ไขการนำเข้า TestDriveStatus
 
 export class SearchTestDriveDto {
   @IsOptional()
   @IsString()
-  customer_name?: string;
+  customer_name?: string; // ยังคงใช้ snake_case เพื่อความเข้ากันได้กับ API ภายนอก
 
   @IsOptional()
   @IsString()

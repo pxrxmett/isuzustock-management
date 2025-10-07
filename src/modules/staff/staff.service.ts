@@ -1,4 +1,3 @@
-// src/modules/staff/staff.service.ts
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -12,20 +11,22 @@ export class StaffService {
     private staffRepository: Repository<Staff>,
   ) {}
 
-  create(createStaffDto: CreateStaffDto) {
+  async create(createStaffDto: CreateStaffDto): Promise<Staff> {
     const staff = this.staffRepository.create(createStaffDto);
     return this.staffRepository.save(staff);
   }
 
-  findAll() {
+  async findAll(): Promise<Staff[]> {
     return this.staffRepository.find();
   }
 
-  async findOne(id: number) {
+  async findOne(id: string): Promise<Staff> {
     const staff = await this.staffRepository.findOne({ where: { id } });
     if (!staff) {
-      throw new NotFoundException(`ไม่พบพนักงาน ID ${id}`);
+      throw new NotFoundException(`Staff with ID ${id} not found`);
     }
     return staff;
   }
+
+  // อื่นๆ เช่น update, remove...
 }

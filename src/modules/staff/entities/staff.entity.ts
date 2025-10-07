@@ -1,19 +1,36 @@
-// src/modules/staff/entities/staff.entity.ts
-import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Entity,
+  Column,
+  PrimaryColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+  OneToMany,
+  Index,
+  BeforeInsert,
+} from 'typeorm';
+import { TestDrive } from '../../test-drive/entities/test-drive.entity';
+import { v4 as uuidv4 } from 'uuid';
 
 @Entity('staffs')
 export class Staff {
-  @PrimaryGeneratedColumn()
-  id: number;
+  @PrimaryColumn('uuid')
+  id: string;
 
-  @Column()
-  staff_code: string;
+  @BeforeInsert()
+  generateId() {
+    if (!this.id) {
+      this.id = uuidv4();
+    }
+  }
 
-  @Column()
-  first_name: string;
+  @Column({ name: 'staff_code', unique: true })
+  staffCode: string;
 
-  @Column()
-  last_name: string;
+  @Column({ name: 'first_name' })
+  firstName: string;
+
+  @Column({ name: 'last_name' })
+  lastName: string;
 
   @Column()
   position: string;
@@ -27,9 +44,31 @@ export class Staff {
   @Column()
   email: string;
 
-  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
-  created_at: Date;
+  @Column({ default: 'staff' })
+  role: string;
 
-  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP', onUpdate: 'CURRENT_TIMESTAMP' })
-  updated_at: Date;
+  @Column({ default: 'active' })
+  status: string;
+
+  @Column({ name: 'line_user_id', nullable: true, unique: true })
+  @Index('IDX_STAFF_LINE_USER_ID')
+  lineUserId: string;
+
+  @Column({ name: 'line_display_name', nullable: true })
+  lineDisplayName: string;
+
+  @Column({ name: 'line_picture_url', nullable: true })
+  linePictureUrl: string;
+
+  @Column({ name: 'line_last_login_at', nullable: true })
+  lineLastLoginAt: Date;
+
+  @OneToMany(() => TestDrive, (testDrive) => testDrive.staff)
+  testDrives: TestDrive[];
+
+  @CreateDateColumn({ name: 'created_at' })
+  createdAt: Date;
+
+  @UpdateDateColumn({ name: 'updated_at' })
+  updatedAt: Date;
 }

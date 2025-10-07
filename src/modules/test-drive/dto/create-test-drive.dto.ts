@@ -1,6 +1,6 @@
 import { IsNotEmpty, IsString, IsDateString, IsNumber, IsOptional, IsEnum } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { TestDriveStatus } from '../entities/test-drive.entity';
+import { TestDriveStatus } from '../entities/test-drive-status.enum'; // แก้ไขการนำเข้า TestDriveStatus
 
 export class CreateTestDriveDto {
   @ApiProperty({ 
@@ -10,7 +10,7 @@ export class CreateTestDriveDto {
   })
   @IsNumber()
   @IsNotEmpty()
-  vehicle_id: number;
+  vehicle_id: number; // ยังคงใช้ snake_case เพื่อความเข้ากันได้กับ API ภายนอก
 
   @ApiProperty({ 
     example: 'ทดสอบ ระบบ', 

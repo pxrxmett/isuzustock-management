@@ -1,7 +1,8 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between } from 'typeorm';
-import { TestDrive, TestDriveStatus } from '../entities/test-drive.entity';
+import { TestDrive } from '../entities/test-drive.entity';
+import { TestDriveStatus } from '../entities/test-drive-status.enum'; // แก้ไขการนำเข้า TestDriveStatus
 import { Vehicle, VehicleStatus } from '../../stock/entities/vehicle.entity';
 import { Staff } from '../../staff/entities/staff.entity';
 import { CreateTestDriveDto } from '../dto/create-test-drive.dto';
@@ -25,7 +26,7 @@ export class TestDriveService {
   async create(createDto: CreateTestDriveDto) {
     // ตรวจสอบความพร้อมของรถ
     const vehicle = await this.vehicleRepository.findOne({
-      where: { id: createDto.vehicle_id },
+      where: { id: createDto.vehicle_id }, // ใช้ snake_case ตาม DTO
     });
 
     if (!vehicle || vehicle.status !== VehicleStatus.AVAILABLE) {
@@ -35,9 +36,9 @@ export class TestDriveService {
     // ตรวจสอบการจองซ้ำซ้อน
     const existingBooking = await this.testDriveRepository.findOne({
       where: {
-        vehicle_id: createDto.vehicle_id,
+        vehicleId: createDto.vehicle_id, // แปลงจาก snake_case เป็น camelCase เมื่อใช้กับ entity
         status: TestDriveStatus.PENDING,
-        start_time: Between(createDto.start_time, createDto.expected_end_time)
+        startTime: Between(createDto.start_time, createDto.expected_end_time) // แปลงจาก snake_case เป็น camelCase เมื่อใช้กับ entity
       }
     });
 
@@ -46,10 +47,21 @@ export class TestDriveService {
     }
 
     // สร้างการจองใหม่
-    const testDrive = this.testDriveRepository.create({
-      ...createDto,
-      status: TestDriveStatus.PENDING
-    });
+    const testDriveData = {
+      vehicleId: createDto.vehicle_id,
+      customerName: createDto.customer_name,
+      customerPhone: createDto.customer_phone,
+      startTime: createDto.start_time,
+      expectedEndTime: createDto.expected_end_time,
+      actualEndTime: createDto.actual_end_time,
+      testRoute: createDto.test_route,
+      distance: createDto.distance,
+      duration: createDto.duration,
+      responsibleStaffId: String(createDto.responsible_staff), // แปลงเป็น string
+      status: createDto.status || TestDriveStatus.PENDING
+    };
+
+    const testDrive = this.testDriveRepository.create(testDriveData);
 
     await this.vehicleRepository.update(vehicle.id, { 
       status: VehicleStatus.IN_USE 
@@ -66,18 +78,18 @@ export class TestDriveService {
         'td',
         'vehicle',
         'staff.id',
-        'staff.first_name',
-        'staff.last_name'
+        'staff.firstName',
+        'staff.lastName'
       ]);
 
-    if (searchDto.customer_name) {
-      query.andWhere('td.customer_name ILIKE :name', { 
+    if (searchDto.customer_name) { // ใช้ snake_case ตาม DTO
+      query.andWhere('td.customerName ILIKE :name', { // ใช้ camelCase ตาม entity
         name: `%${searchDto.customer_name}%` 
       });
     }
 
-    if (searchDto.customer_phone) {
-      query.andWhere('td.customer_phone LIKE :phone', { 
+    if (searchDto.customer_phone) { // ใช้ snake_case ตาม DTO
+      query.andWhere('td.customerPhone LIKE :phone', { // ใช้ camelCase ตาม entity
         phone: `%${searchDto.customer_phone}%` 
       });
     }
@@ -94,8 +106,8 @@ export class TestDriveService {
       });
     }
 
-    if (searchDto.start_date && searchDto.end_date) {
-      query.andWhere('td.start_time BETWEEN :startDate AND :endDate', {
+    if (searchDto.start_date && searchDto.end_date) { // ใช้ snake_case ตาม DTO
+      query.andWhere('td.startTime BETWEEN :startDate AND :endDate', {
         startDate: searchDto.start_date,
         endDate: searchDto.end_date
       });
@@ -105,13 +117,13 @@ export class TestDriveService {
 
     return testDrives.map(td => ({
       id: td.id,
-      start_time: td.start_time,
-      created_at: td.created_at,
-      customer_name: td.customer_name,
-      customer_phone: td.customer_phone,
+      start_time: td.startTime, // แปลงจาก camelCase เป็น snake_case เมื่อส่งกลับ API
+      created_at: td.createdAt,
+      customer_name: td.customerName,
+      customer_phone: td.customerPhone,
       duration: td.duration,
       status: td.status,
-      staff_name: td.staff ? `${td.staff.first_name} ${td.staff.last_name}` : null,
+      staff_name: td.staff ? `${td.staff.firstName} ${td.staff.lastName}` : null,
       vehicle: td.vehicle
     }));
   }
@@ -123,8 +135,8 @@ export class TestDriveService {
       select: {
         staff: {
           id: true,
-          first_name: true,
-          last_name: true
+          firstName: true,
+          lastName: true
         }
       }
     });
@@ -136,7 +148,7 @@ export class TestDriveService {
     return {
       ...testDrive,
       staff_name: testDrive.staff ? 
-        `${testDrive.staff.first_name} ${testDrive.staff.last_name}` : 
+        `${testDrive.staff.firstName} ${testDrive.staff.lastName}` : 
         null
     };
   }
@@ -149,12 +161,26 @@ export class TestDriveService {
     }
 
     if (updateDto.status === TestDriveStatus.COMPLETED) {
-      await this.vehicleRepository.update(testDrive.vehicle_id, {
+      await this.vehicleRepository.update(testDrive.vehicleId, {
         status: VehicleStatus.AVAILABLE
       });
     }
 
-    Object.assign(testDrive, updateDto);
+    // แปลงจาก snake_case ใน DTO เป็น camelCase ใน entity
+    const entityToUpdate = {};
+    
+    if (updateDto.customer_name) entityToUpdate['customerName'] = updateDto.customer_name;
+    if (updateDto.customer_phone) entityToUpdate['customerPhone'] = updateDto.customer_phone;
+    if (updateDto.test_route) entityToUpdate['testRoute'] = updateDto.test_route;
+    if (updateDto.start_time) entityToUpdate['startTime'] = updateDto.start_time;
+    if (updateDto.expected_end_time) entityToUpdate['expectedEndTime'] = updateDto.expected_end_time;
+    if (updateDto.actual_end_time) entityToUpdate['actualEndTime'] = updateDto.actual_end_time;
+    if (updateDto.distance) entityToUpdate['distance'] = updateDto.distance;
+    if (updateDto.duration) entityToUpdate['duration'] = updateDto.duration;
+    if (updateDto.responsible_staff) entityToUpdate['responsibleStaffId'] = String(updateDto.responsible_staff);
+    if (updateDto.status) entityToUpdate['status'] = updateDto.status;
+
+    Object.assign(testDrive, entityToUpdate);
     return this.testDriveRepository.save(testDrive);
   }
 
@@ -165,7 +191,7 @@ export class TestDriveService {
       throw new BadRequestException('ไม่สามารถยกเลิกรายการที่ไม่ได้อยู่ในสถานะรอดำเนินการ');
     }
 
-    await this.vehicleRepository.update(testDrive.vehicle_id, {
+    await this.vehicleRepository.update(testDrive.vehicleId, {
       status: VehicleStatus.AVAILABLE
     });
 
@@ -184,7 +210,7 @@ export class TestDriveService {
       'เบอร์โทร': td.customer_phone,
       'รถทดสอบ': `${td.vehicle.model} (${td.vehicle.vehicleCode})`,
       'ระยะเวลา': `${td.duration} นาที`,
-      'สถานะ': this.getStatusText(td.status)
+      'สถานะ': this.getStatusText(td.status as TestDriveStatus) // แก้ไขการแปลง type
     }));
 
     const wb = XLSX.utils.book_new();
