@@ -6,28 +6,50 @@ export const getDatabaseConfig = (
 ): TypeOrmModuleOptions => {
   const isProduction = configService.get('NODE_ENV') === 'production';
   
-  // =============== Debug Logs (สำคัญมาก!) ===============
+  // ลอง DATABASE_URL ก่อน
+  const databaseUrl = configService.get('DATABASE_URL');
+  
   console.log('=== Database Config Debug ===');
   console.log('NODE_ENV:', configService.get('NODE_ENV'));
-  console.log('DB_HOST:', configService.get('DB_HOST'));
-  console.log('DB_PORT:', configService.get('DB_PORT'));
-  console.log('DB_USERNAME:', configService.get('DB_USERNAME'));
-  console.log('DB_PASSWORD exists:', !!configService.get('DB_PASSWORD'));
-  console.log('DB_DATABASE:', configService.get('DB_DATABASE'));
-  console.log('============================');
-  // =====================================================
+  console.log('DATABASE_URL exists:', !!databaseUrl);
   
-  // อ่านค่า
+  if (databaseUrl) {
+    console.log('✅ Using DATABASE_URL');
+    console.log('============================');
+    
+    return {
+      type: 'mysql',
+      url: databaseUrl,
+      entities: [__dirname + '/../**/*.entity{.ts,.js}'],
+      synchronize: false,
+      logging: !isProduction,
+      extra: {
+        connectionLimit: 10,
+        waitForConnections: true,
+        queueLimit: 0,
+        connectTimeout: 60000,
+      },
+      timezone: '+07:00',
+    };
+  }
+  
+  // ถ้าไม่มี DATABASE_URL ใช้แบบแยก
+  console.log('Using individual variables');
   const host = configService.get('DB_HOST');
   const port = configService.get('DB_PORT');
   const username = configService.get('DB_USERNAME');
   const password = configService.get('DB_PASSWORD');
   const database = configService.get('DB_DATABASE');
   
-  // ตรวจสอบว่าได้ค่าครบหรือไม่
+  console.log('DB_HOST:', host);
+  console.log('DB_PORT:', port);
+  console.log('DB_USERNAME:', username);
+  console.log('DB_PASSWORD exists:', !!password);
+  console.log('DB_DATABASE:', database);
+  console.log('============================');
+  
   if (!host || !username || !password || !database) {
     console.error('❌ Missing required database configuration!');
-    console.error('Please check Railway Variables are set correctly');
     throw new Error('Database configuration is incomplete');
   }
   
@@ -40,13 +62,14 @@ export const getDatabaseConfig = (
     database: database,
     entities: [__dirname + '/../**/*.entity{.ts,.js}'],
     synchronize: false,
-    logging: !isProduction, // ปิด logging ใน production
+    logging: !isProduction,
     extra: {
       connectionLimit: 10,
       waitForConnections: true,
       queueLimit: 0,
-      connectTimeout: 60000, // เพิ่ม timeout สำหรับ Railway
+      connectTimeout: 60000,
     },
     timezone: '+07:00',
   };
+};
 };
