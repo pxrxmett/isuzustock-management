@@ -72,4 +72,3 @@ export const getDatabaseConfig = (
     timezone: '+07:00',
   };
 };
-};
