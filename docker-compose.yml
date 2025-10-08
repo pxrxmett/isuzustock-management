@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  # MySQL Database
+  db:
+    image: mysql:8.0
+    container_name: stock-management-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root123
+      MYSQL_DATABASE: stock_management
+      MYSQL_USER: testdrive
+      MYSQL_PASSWORD: testdrive123
+    ports:
+      - "3306:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+    networks:
+      - backend-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot123"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend API
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: stock-management-api
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      # Database Configuration
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_USERNAME: testdrive
+      DB_PASSWORD: testdrive123
+      DB_DATABASE: stock_management
+      
+      # LINE Configuration
+      LINE_CHANNEL_ID: ${LINE_CHANNEL_ID:-your-channel-id}
+      LINE_CHANNEL_SECRET: ${LINE_CHANNEL_SECRET:-your-channel-secret}
+      LINE_LIFF_ID: ${LINE_LIFF_ID:-your-liff-id}
+      
+      # JWT Secret
+      JWT_SECRET: ${JWT_SECRET:-my-secret-key-12345}
+      
+      # Server Configuration
+      PORT: 3000
+      NODE_ENV: development
+    volumes:
+      - .:/app
+      - /app/node_modules
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - backend-network
+
+volumes:
+  db_data:
+
+networks:
+  backend-network:
+    driver: bridge
