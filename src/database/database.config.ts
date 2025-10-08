@@ -4,28 +4,25 @@ import { ConfigService } from '@nestjs/config';
 export const getDatabaseConfig = (
   configService: ConfigService,
 ): TypeOrmModuleOptions => {
-  const nodeEnv = configService.get('NODE_ENV') || process.env.NODE_ENV;
+  const nodeEnv = process.env.NODE_ENV || 'development';
   const isProduction = nodeEnv === 'production';
   
   console.log('=== Database Config Debug ===');
   console.log('NODE_ENV:', nodeEnv);
   
-  // ใช้ process.env โดยตรงแทน ConfigService (Railway inject ตรงนี้)
-  const databaseUrl = process.env.DATABASE_URL;
-  const dbHost = process.env.DB_HOST;
-  const dbPort = process.env.DB_PORT;
-  const dbUsername = process.env.DB_USERNAME;
-  const dbPassword = process.env.DB_PASSWORD;
-  const dbDatabase = process.env.DB_DATABASE;
-  
-  console.log('DATABASE_URL exists:', !!databaseUrl);
-  console.log('DB_HOST:', dbHost);
-  console.log('DB_PASSWORD exists:', !!dbPassword);
-  
-  // ใน production ใช้ค่าจาก process.env โดยตรง
+  // ใน production ใช้ process.env โดยตรง
   if (isProduction) {
+    const databaseUrl = process.env.DATABASE_URL;
+    const dbHost = process.env.DB_HOST;
+    const dbPassword = process.env.DB_PASSWORD;
+    
+    console.log('DATABASE_URL exists:', !!databaseUrl);
+    console.log('DB_HOST:', dbHost);
+    console.log('DB_PASSWORD exists:', !!dbPassword);
+    
+    // ลอง DATABASE_URL ก่อน
     if (databaseUrl) {
-      console.log('✅ Using DATABASE_URL from process.env');
+      console.log('✅ Using DATABASE_URL');
       console.log('============================');
       
       return {
@@ -45,8 +42,12 @@ export const getDatabaseConfig = (
     }
     
     // ถ้าไม่มี DATABASE_URL ใช้แบบแยก
+    const dbPort = process.env.DB_PORT;
+    const dbUsername = process.env.DB_USERNAME;
+    const dbDatabase = process.env.DB_DATABASE;
+    
     if (dbHost && dbUsername && dbPassword && dbDatabase) {
-      console.log('✅ Using individual variables from process.env');
+      console.log('✅ Using individual variables');
       console.log('============================');
       
       return {
@@ -69,8 +70,8 @@ export const getDatabaseConfig = (
       };
     }
     
-    // ถ้าไม่มีทั้งสองแบบ ใช้ค่า fallback
-    console.warn('⚠️ Using fallback hardcoded connection');
+    // Fallback: ใช้ค่าตายตัว (จะเห็นข้อความนี้ใน Logs)
+    console.log('⚠️ Using fallback hardcoded connection');
     console.log('============================');
     
     return {
@@ -93,16 +94,15 @@ export const getDatabaseConfig = (
     };
   }
   
-  // สำหรับ local development ใช้ ConfigService
-  console.log('Using ConfigService for local development');
+  // Local development ใช้ ConfigService
+  console.log('Using ConfigService for local');
+  console.log('============================');
+  
   const host = configService.get('DB_HOST') || '127.0.0.1';
   const port = configService.get('DB_PORT');
   const username = configService.get('DB_USERNAME') || 'stockuser';
   const password = configService.get('DB_PASSWORD') || 'stock1234';
   const database = configService.get('DB_DATABASE') || 'stock_management';
-  
-  console.log('DB_HOST:', host);
-  console.log('============================');
   
   return {
     type: 'mysql',
