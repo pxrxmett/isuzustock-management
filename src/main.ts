@@ -14,20 +14,18 @@ async function bootstrap() {
 
   const isProduction = process.env.NODE_ENV === 'production';
   
-  // CORS Configuration
+  // CORS Configuration - ต้องอยู่ก่อน setGlobalPrefix
   const allowedOrigins = [
-    'http://localhost:8080',  // Desktop Admin Frontend
-    'http://localhost:4000',  // Mobile Frontend (local)
+    'http://localhost:8080',
+    'http://localhost:4000',
+    'https://testdrive-liff-app-production.up.railway.app',
+    'http://testdrive-liff-app-production.up.railway.app'
   ];
 
-  // เพิ่ม Frontend URL จาก Railway
   if (process.env.FRONTEND_URL) {
     const frontendUrl = process.env.FRONTEND_URL;
-    
-    // เพิ่ม URL ตามที่ระบุ
     allowedOrigins.push(frontendUrl);
     
-    // รองรับทั้ง http และ https
     if (frontendUrl.startsWith('https://')) {
       allowedOrigins.push(frontendUrl.replace('https://', 'http://'));
     } else if (frontendUrl.startsWith('http://')) {
@@ -39,12 +37,15 @@ async function bootstrap() {
   console.log('Allowed Origins:', allowedOrigins);
   console.log('========================');
 
+  // Enable CORS with OPTIONS support
   app.enableCors({
     origin: allowedOrigins,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Accept', 'Authorization'],
-    exposedHeaders: ['Authorization']
+    exposedHeaders: ['Authorization'],
+    preflightContinue: false,
+    optionsSuccessStatus: 204
   });
 
   app.setGlobalPrefix('api');
