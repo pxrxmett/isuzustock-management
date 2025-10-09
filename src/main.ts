@@ -14,7 +14,7 @@ async function bootstrap() {
 
   const isProduction = process.env.NODE_ENV === 'production';
   
-  // CORS Configuration - ต้องอยู่ก่อน setGlobalPrefix
+  // CORS Configuration
   const allowedOrigins = [
     'http://localhost:8080',
     'http://localhost:4000',
@@ -37,7 +37,6 @@ async function bootstrap() {
   console.log('Allowed Origins:', allowedOrigins);
   console.log('========================');
 
-  // Enable CORS with OPTIONS support
   app.enableCors({
     origin: allowedOrigins,
     credentials: true,
@@ -48,7 +47,10 @@ async function bootstrap() {
     optionsSuccessStatus: 204
   });
 
-  app.setGlobalPrefix('api');
+  // Set global prefix BUT exclude health check routes
+  app.setGlobalPrefix('api', {
+    exclude: ['/', '/health']
+  });
   
   app.useGlobalPipes(new ValidationPipe({
     whitelist: true,
@@ -83,11 +85,13 @@ async function bootstrap() {
     console.log('🌐 Public URL: https://isuzu-liff.up.railway.app');
     console.log('📄 Swagger: https://isuzu-liff.up.railway.app/docs');
     console.log('🔗 API Base: https://isuzu-liff.up.railway.app/api');
+    console.log('❤️  Health: https://isuzu-liff.up.railway.app/health');
   } else {
     console.log('🚀 Backend API is running in DEVELOPMENT');
     console.log('📡 Local: http://localhost:' + port);
     console.log('📄 Swagger: http://localhost:' + port + '/docs');
     console.log('🔗 API Base: http://localhost:' + port + '/api');
+    console.log('❤️  Health: http://localhost:' + port + '/health');
   }
   console.log('================================');
   console.log('');
