@@ -63,6 +63,10 @@ export class Staff {
   @Column({ name: 'line_last_login_at', nullable: true })
   lineLastLoginAt: Date;
 
+  // ⭐ เพิ่มบรรทัดนี้
+  @Column({ name: 'is_line_linked', type: 'tinyint', default: 0 })
+  isLineLinked: boolean;
+
   @OneToMany(() => TestDrive, (testDrive) => testDrive.staff)
   testDrives: TestDrive[];
 
