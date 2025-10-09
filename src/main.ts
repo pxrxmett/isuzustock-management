@@ -14,6 +14,23 @@ async function bootstrap() {
 
   const isProduction = process.env.NODE_ENV === 'production';
   
+  // CRITICAL: Add raw HTTP handler for Railway health check at root
+  const expressApp = app.getHttpAdapter().getInstance();
+  expressApp.get('/', (req, res) => {
+    res.status(200).json({
+      status: 'ok',
+      service: 'Stock Management API',
+      timestamp: new Date().toISOString()
+    });
+  });
+  expressApp.get('/health', (req, res) => {
+    res.status(200).json({
+      status: 'healthy',
+      uptime: process.uptime(),
+      timestamp: new Date().toISOString()
+    });
+  });
+  
   // CORS Configuration
   const allowedOrigins = [
     'http://localhost:8080',
@@ -47,10 +64,7 @@ async function bootstrap() {
     optionsSuccessStatus: 204
   });
 
-  // Set global prefix BUT exclude health check routes
-  app.setGlobalPrefix('api', {
-    exclude: ['/', '/health']
-  });
+  app.setGlobalPrefix('api');
   
   app.useGlobalPipes(new ValidationPipe({
     whitelist: true,
