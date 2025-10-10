@@ -4,9 +4,9 @@ import {
   PrimaryGeneratedColumn,
   CreateDateColumn,
   UpdateDateColumn,
-  OneToMany, // ✅ เพิ่มบรรทัดนี้
+  OneToMany,
 } from 'typeorm';
-import { TestDrive } from '../../test-drive/entities/test-drive.entity'; // ✅ เพิ่ม import
+import { TestDrive } from '../../test-drive/entities/test-drive.entity';
 
 @Entity('staffs')
 export class Staff {
@@ -56,11 +56,7 @@ export class Staff {
 
   // ===== Relations =====
   
-  /**
-   * ✅ เพิ่ม relation นี้
-   * Staff หนึ่งคนสามารถรับผิดชอบ Test Drive หลายรายการ
-   */
-  @OneToMany(() => TestDrive, (testDrive) => testDrive.responsibleStaff)
+  @OneToMany(() => TestDrive, (testDrive) => testDrive.staff)  // ✅ ใช้ชื่อเดิม "staff"
   testDrives: TestDrive[];
 
   // ===== Timestamps =====
@@ -71,10 +67,11 @@ export class Staff {
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 
-  // ===== Virtual Property =====
+  // ===== Virtual Property (แก้แค่นี้!) =====
   
   /**
-   * เช็คว่าพนักงานเชื่อมโยง LINE แล้วหรือยัง
+   * ✅ ลบ @Column decorator ออก
+   * ✅ เปลี่ยนเป็น getter แทน
    */
   get isLineLinked(): boolean {
     return !!this.lineUserId;
