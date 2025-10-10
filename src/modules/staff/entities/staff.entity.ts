@@ -1,27 +1,15 @@
 import {
   Entity,
   Column,
-  PrimaryColumn,
+  PrimaryGeneratedColumn,
   CreateDateColumn,
   UpdateDateColumn,
-  OneToMany,
-  Index,
-  BeforeInsert,
 } from 'typeorm';
-import { TestDrive } from '../../test-drive/entities/test-drive.entity';
-import { v4 as uuidv4 } from 'uuid';
 
 @Entity('staffs')
 export class Staff {
-  @PrimaryColumn('uuid')
+  @PrimaryGeneratedColumn('uuid')
   id: string;
-
-  @BeforeInsert()
-  generateId() {
-    if (!this.id) {
-      this.id = uuidv4();
-    }
-  }
 
   @Column({ name: 'staff_code', unique: true })
   staffCode: string;
@@ -32,16 +20,16 @@ export class Staff {
   @Column({ name: 'last_name' })
   lastName: string;
 
-  @Column()
+  @Column({ nullable: true })
   position: string;
 
-  @Column()
+  @Column({ nullable: true })
   department: string;
 
-  @Column()
+  @Column({ nullable: true })
   phone: string;
 
-  @Column()
+  @Column({ nullable: true })
   email: string;
 
   @Column({ default: 'staff' })
@@ -50,8 +38,9 @@ export class Staff {
   @Column({ default: 'active' })
   status: string;
 
-  @Column({ name: 'line_user_id', nullable: true, unique: true })
-  @Index('IDX_STAFF_LINE_USER_ID')
+  // ===== LINE Integration Fields (ตรงกับ Database Schema) =====
+  
+  @Column({ name: 'line_user_id', unique: true, nullable: true })
   lineUserId: string;
 
   @Column({ name: 'line_display_name', nullable: true })
@@ -60,19 +49,24 @@ export class Staff {
   @Column({ name: 'line_picture_url', nullable: true })
   linePictureUrl: string;
 
-  @Column({ name: 'line_last_login_at', nullable: true })
+  @Column({ name: 'line_last_login_at', type: 'datetime', nullable: true })
   lineLastLoginAt: Date;
 
-  // ⭐ เพิ่มบรรทัดนี้
-  @Column({ name: 'is_line_linked', type: 'tinyint', default: 0 })
-  isLineLinked: boolean;
-
-  @OneToMany(() => TestDrive, (testDrive) => testDrive.staff)
-  testDrives: TestDrive[];
-
+  // ===== Timestamps =====
+  
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
+
+  // ===== Virtual Property (Computed, ไม่เก็บใน Database) =====
+  
+  /**
+   * เช็คว่าพนักงานเชื่อมโยง LINE แล้วหรือยัง
+   * @returns true ถ้ามี lineUserId, false ถ้าไม่มี
+   */
+  get isLineLinked(): boolean {
+    return !!this.lineUserId;
+  }
 }
