@@ -1,17 +1,27 @@
 import {
   Entity,
   Column,
-  PrimaryGeneratedColumn,
+  PrimaryColumn,
   CreateDateColumn,
   UpdateDateColumn,
   OneToMany,
+  Index,
+  BeforeInsert,
 } from 'typeorm';
 import { TestDrive } from '../../test-drive/entities/test-drive.entity';
+import { v4 as uuidv4 } from 'uuid';
 
 @Entity('staffs')
 export class Staff {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryColumn('uuid')
   id: string;
+
+  @BeforeInsert()
+  generateId() {
+    if (!this.id) {
+      this.id = uuidv4();
+    }
+  }
 
   @Column({ name: 'staff_code', unique: true })
   staffCode: string;
@@ -22,16 +32,16 @@ export class Staff {
   @Column({ name: 'last_name' })
   lastName: string;
 
-  @Column({ nullable: true })
+  @Column()
   position: string;
 
-  @Column({ nullable: true })
+  @Column()
   department: string;
 
-  @Column({ nullable: true })
+  @Column()
   phone: string;
 
-  @Column({ nullable: true })
+  @Column()
   email: string;
 
   @Column({ default: 'staff' })
@@ -40,9 +50,8 @@ export class Staff {
   @Column({ default: 'active' })
   status: string;
 
-  // ===== LINE Integration Fields =====
-  
-  @Column({ name: 'line_user_id', unique: true, nullable: true })
+  @Column({ name: 'line_user_id', nullable: true, unique: true })
+  @Index('IDX_STAFF_LINE_USER_ID')
   lineUserId: string;
 
   @Column({ name: 'line_display_name', nullable: true })
@@ -51,29 +60,19 @@ export class Staff {
   @Column({ name: 'line_picture_url', nullable: true })
   linePictureUrl: string;
 
-  @Column({ name: 'line_last_login_at', type: 'datetime', nullable: true })
+  @Column({ name: 'line_last_login_at', nullable: true })
   lineLastLoginAt: Date;
 
-  // ===== Relations =====
-  
-  @OneToMany(() => TestDrive, (testDrive) => testDrive.staff)  // ✅ ใช้ชื่อเดิม "staff"
+  // ⭐ เพิ่มบรรทัดนี้
+  @Column({ name: 'is_line_linked', type: 'tinyint', default: 0 })
+  isLineLinked: boolean;
+
+  @OneToMany(() => TestDrive, (testDrive) => testDrive.staff)
   testDrives: TestDrive[];
 
-  // ===== Timestamps =====
-  
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
-
-  // ===== Virtual Property (แก้แค่นี้!) =====
-  
-  /**
-   * ✅ ลบ @Column decorator ออก
-   * ✅ เปลี่ยนเป็น getter แทน
-   */
-  get isLineLinked(): boolean {
-    return !!this.lineUserId;
-  }
 }
