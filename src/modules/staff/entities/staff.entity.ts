@@ -4,7 +4,9 @@ import {
   PrimaryGeneratedColumn,
   CreateDateColumn,
   UpdateDateColumn,
+  OneToMany, // ✅ เพิ่มบรรทัดนี้
 } from 'typeorm';
+import { TestDrive } from '../../test-drive/entities/test-drive.entity'; // ✅ เพิ่ม import
 
 @Entity('staffs')
 export class Staff {
@@ -38,7 +40,7 @@ export class Staff {
   @Column({ default: 'active' })
   status: string;
 
-  // ===== LINE Integration Fields (ตรงกับ Database Schema) =====
+  // ===== LINE Integration Fields =====
   
   @Column({ name: 'line_user_id', unique: true, nullable: true })
   lineUserId: string;
@@ -52,6 +54,15 @@ export class Staff {
   @Column({ name: 'line_last_login_at', type: 'datetime', nullable: true })
   lineLastLoginAt: Date;
 
+  // ===== Relations =====
+  
+  /**
+   * ✅ เพิ่ม relation นี้
+   * Staff หนึ่งคนสามารถรับผิดชอบ Test Drive หลายรายการ
+   */
+  @OneToMany(() => TestDrive, (testDrive) => testDrive.responsibleStaff)
+  testDrives: TestDrive[];
+
   // ===== Timestamps =====
   
   @CreateDateColumn({ name: 'created_at' })
@@ -60,11 +71,10 @@ export class Staff {
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 
-  // ===== Virtual Property (Computed, ไม่เก็บใน Database) =====
+  // ===== Virtual Property =====
   
   /**
    * เช็คว่าพนักงานเชื่อมโยง LINE แล้วหรือยัง
-   * @returns true ถ้ามี lineUserId, false ถ้าไม่มี
    */
   get isLineLinked(): boolean {
     return !!this.lineUserId;
