@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { getDatabaseConfig } from './database/database.config';
+import { validate } from './config/env.validation';
 import { StockModule } from './modules/stock/stock.module';
 import { TestDriveModule } from './modules/test-drive/test-drive.module';
 import { AuthModule } from './modules/auth/auth.module';
@@ -16,6 +17,7 @@ import { AppController } from './app.controller';
       isGlobal: true,
       envFilePath: ['.env.local', '.env'],
       ignoreEnvFile: process.env.NODE_ENV === 'production',
+      validate,
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],

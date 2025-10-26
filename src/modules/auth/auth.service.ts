@@ -1,28 +1,76 @@
 import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import * as bcrypt from 'bcrypt';
 import { LoginDto } from './dto/login.dto';
+import { User } from './entities/user.entity';
 
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
-  
-  constructor(private jwtService: JwtService) {}
+
+  constructor(
+    private jwtService: JwtService,
+    @InjectRepository(User)
+    private userRepository: Repository<User>,
+  ) {}
 
   async login(loginDto: LoginDto) {
-    if (loginDto.username === 'admin' && loginDto.password === 'admin123') {
-      const payload = {
-        id: 1,
-        username: loginDto.username,
-        role: 'admin'
-      };
+    // ค้นหา user จาก database
+    const user = await this.userRepository.findOne({
+      where: { username: loginDto.username },
+    });
 
-      return {
-        access_token: this.jwtService.sign(payload),
-        user: payload,
-      };
+    // ตรวจสอบว่ามี user และรหัสผ่านถูกต้อง
+    if (!user) {
+      this.logger.warn(`Failed login attempt for username: ${loginDto.username}`);
+      throw new UnauthorizedException('รหัสผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
     }
 
-    throw new UnauthorizedException('รหัสผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
+    // ตรวจสอบสถานะ user
+    if (user.status !== 'active') {
+      this.logger.warn(`Inactive user login attempt: ${loginDto.username}`);
+      throw new UnauthorizedException('บัญชีผู้ใช้ถูกระงับหรือไม่ได้ใช้งาน');
+    }
+
+    // เปรียบเทียบรหัสผ่านด้วย bcrypt
+    const isPasswordValid = await bcrypt.compare(
+      loginDto.password,
+      user.passwordHash,
+    );
+
+    if (!isPasswordValid) {
+      this.logger.warn(`Invalid password for username: ${loginDto.username}`);
+      throw new UnauthorizedException('รหัสผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
+    }
+
+    // อัปเดต lastLoginAt
+    await this.userRepository.update(user.id, {
+      lastLoginAt: new Date(),
+    });
+
+    // สร้าง JWT payload
+    const payload = {
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      role: user.role,
+    };
+
+    this.logger.log(`Successful login for user: ${user.username}`);
+
+    return {
+      access_token: this.jwtService.sign(payload),
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role,
+      },
+    };
   }
 
   async validateToken(token: string) {
@@ -36,13 +84,25 @@ export class AuthService {
   // เพิ่มเมธอดสำหรับการตรวจสอบข้อมูลผู้ใช้ปัจจุบัน
   async getUserProfile(user: any) {
     try {
-      // เนื่องจากเราไม่มีการเชื่อมต่อกับฐานข้อมูลจริงๆ ในตัวอย่างนี้
-      // เราจะส่งคืนข้อมูลผู้ใช้จาก user payload ที่อยู่ใน JWT
+      // ดึงข้อมูล user จาก database
+      const userData = await this.userRepository.findOne({
+        where: { id: user.id },
+        select: ['id', 'username', 'email', 'firstName', 'lastName', 'role', 'status', 'lastLoginAt'],
+      });
+
+      if (!userData) {
+        throw new UnauthorizedException('ไม่พบข้อมูลผู้ใช้');
+      }
+
       return {
-        id: user.id,
-        username: user.username,
-        role: user.role,
-        // เพิ่มข้อมูลอื่นๆ ตามต้องการ
+        id: userData.id,
+        username: userData.username,
+        email: userData.email,
+        firstName: userData.firstName,
+        lastName: userData.lastName,
+        role: userData.role,
+        status: userData.status,
+        lastLoginAt: userData.lastLoginAt,
       };
     } catch (error) {
       this.logger.error(`เกิดข้อผิดพลาดในการดึงข้อมูลผู้ใช้: ${error.message}`);
@@ -55,23 +115,32 @@ export class AuthService {
     try {
       // 1. ตรวจสอบ token เดิม
       const decodedToken = this.jwtService.verify(accessToken);
-      
-      // 2. เนื่องจากเราไม่มีการเชื่อมต่อกับฐานข้อมูลจริงๆ ในตัวอย่างนี้
-      // เราจะใช้ข้อมูลจาก token เดิมเพื่อสร้าง token ใหม่
-      const payload = {
-        id: decodedToken.id,
-        username: decodedToken.username,
-        role: decodedToken.role,
-      };
+
+      // 2. ตรวจสอบว่า user ยังมีอยู่ในระบบและ active
+      const user = await this.userRepository.findOne({
+        where: { id: decodedToken.id },
+      });
+
+      if (!user || user.status !== 'active') {
+        throw new UnauthorizedException('บัญชีผู้ใช้ไม่พร้อมใช้งาน');
+      }
 
       // 3. สร้าง token ใหม่
+      const payload = {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        role: user.role,
+      };
+
       return {
         success: true,
         access_token: this.jwtService.sign(payload),
         user: {
-          id: payload.id,
-          username: payload.username,
-          role: payload.role,
+          id: user.id,
+          username: user.username,
+          email: user.email,
+          role: user.role,
         },
       };
     } catch (error) {
