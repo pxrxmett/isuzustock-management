@@ -65,6 +65,3 @@ export class TestDrive {
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 }
-  @UpdateDateColumn({ name: 'updated_at' })
-  updatedAt: Date;
-}
