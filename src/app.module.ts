@@ -8,6 +8,7 @@ import { TestDriveModule } from './modules/test-drive/test-drive.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { StaffModule } from './modules/staff/staff.module';
 import { LineIntegrationModule } from './modules/line-integration/line-integration.module';
+import { EventsModule } from './modules/events/events.module';
 import { AppController } from './app.controller';
 
 @Module({
@@ -25,10 +26,11 @@ import { AppController } from './app.controller';
       inject: [ConfigService],
     }),
     AuthModule,
-    StockModule, 
+    StockModule,
     TestDriveModule,
     StaffModule,
     LineIntegrationModule,
+    EventsModule,
   ],
 })
 export class AppModule {}

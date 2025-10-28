@@ -5,7 +5,9 @@ import { TestDrive } from '../../test-drive/entities/test-drive.entity';
 export enum VehicleStatus {
   AVAILABLE = 'available',
   UNAVAILABLE = 'unavailable',
-  IN_USE = 'in_use'
+  IN_USE = 'in_use',
+  MAINTENANCE = 'maintenance',
+  LOCKED_FOR_EVENT = 'locked_for_event',
 }
 
 @Entity()
@@ -56,6 +58,19 @@ export class Vehicle {
   // เพิ่มความสัมพันธ์กับ TestDrive
   @OneToMany(() => TestDrive, testDrive => testDrive.vehicle)
   testDrives: TestDrive[];
+
+  // Event-related fields
+  @Column({ type: 'boolean', default: false })
+  isLockedForEvent: boolean;
+
+  @Column({ type: 'varchar', length: 36, nullable: true })
+  currentEventId: string;
+
+  @Column({ type: 'datetime', nullable: true })
+  eventLockStartDate: Date;
+
+  @Column({ type: 'datetime', nullable: true })
+  eventLockEndDate: Date;
 
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   createdAt: Date;
