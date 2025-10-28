@@ -73,14 +73,7 @@ export class TestDriveService {
   async findAll(searchDto: SearchTestDriveDto) {
     const query = this.testDriveRepository.createQueryBuilder('td')
       .leftJoinAndSelect('td.vehicle', 'vehicle')
-      .leftJoinAndSelect('td.staff', 'staff')
-      .select([
-        'td',
-        'vehicle',
-        'staff.id',
-        'staff.firstName',
-        'staff.lastName'
-      ]);
+      .leftJoinAndSelect('td.staff', 'staff');
 
     if (searchDto.customer_name) { // ใช้ snake_case ตาม DTO
       query.andWhere('td.customerName ILIKE :name', { // ใช้ camelCase ตาม entity
