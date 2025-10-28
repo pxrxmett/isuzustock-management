@@ -142,7 +142,7 @@ export class CreateEventsTable1745828000000 implements MigrationInterface {
       new TableForeignKey({
         name: 'FK_events_createdBy',
         columnNames: ['createdBy'],
-        referencedTableName: 'staff',
+        referencedTableName: 'staffs',
         referencedColumnNames: ['id'],
         onDelete: 'SET NULL',
       }),
