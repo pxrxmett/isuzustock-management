@@ -13,13 +13,13 @@ export class User {
   @Column({ unique: true, length: 255 })
   email: string;
 
-  @Column({ length: 255 })
+  @Column({ name: 'password_hash', length: 255 })
   passwordHash: string;
 
-  @Column({ length: 100, nullable: true })
+  @Column({ name: 'first_name', length: 100, nullable: true })
   firstName: string;
 
-  @Column({ length: 100, nullable: true })
+  @Column({ name: 'last_name', length: 100, nullable: true })
   lastName: string;
 
   @Column({
@@ -36,12 +36,12 @@ export class User {
   })
   status: string;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ name: 'last_login_at', type: 'timestamp', nullable: true })
   lastLoginAt: Date;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 }
