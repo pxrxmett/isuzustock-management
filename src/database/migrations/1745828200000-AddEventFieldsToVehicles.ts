@@ -4,14 +4,14 @@ export class AddEventFieldsToVehicles1745828200000 implements MigrationInterface
   public async up(queryRunner: QueryRunner): Promise<void> {
     // เพิ่ม enum values ใหม่ให้กับ status
     await queryRunner.query(`
-      ALTER TABLE vehicles
+      ALTER TABLE vehicle
       MODIFY COLUMN status ENUM('available', 'unavailable', 'in_use', 'maintenance', 'locked_for_event')
       DEFAULT 'available'
     `);
 
     // เพิ่มคอลัมน์สำหรับ event locking
     await queryRunner.addColumn(
-      'vehicles',
+      'vehicle',
       new TableColumn({
         name: 'isLockedForEvent',
         type: 'boolean',
@@ -20,7 +20,7 @@ export class AddEventFieldsToVehicles1745828200000 implements MigrationInterface
     );
 
     await queryRunner.addColumn(
-      'vehicles',
+      'vehicle',
       new TableColumn({
         name: 'currentEventId',
         type: 'varchar',
@@ -30,7 +30,7 @@ export class AddEventFieldsToVehicles1745828200000 implements MigrationInterface
     );
 
     await queryRunner.addColumn(
-      'vehicles',
+      'vehicle',
       new TableColumn({
         name: 'eventLockStartDate',
         type: 'datetime',
@@ -39,7 +39,7 @@ export class AddEventFieldsToVehicles1745828200000 implements MigrationInterface
     );
 
     await queryRunner.addColumn(
-      'vehicles',
+      'vehicle',
       new TableColumn({
         name: 'eventLockEndDate',
         type: 'datetime',
@@ -47,18 +47,18 @@ export class AddEventFieldsToVehicles1745828200000 implements MigrationInterface
       }),
     );
 
-    console.log('✅ Event-related fields added to vehicles table');
+    console.log('✅ Event-related fields added to vehicle table');
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.dropColumn('vehicles', 'eventLockEndDate');
-    await queryRunner.dropColumn('vehicles', 'eventLockStartDate');
-    await queryRunner.dropColumn('vehicles', 'currentEventId');
-    await queryRunner.dropColumn('vehicles', 'isLockedForEvent');
+    await queryRunner.dropColumn('vehicle', 'eventLockEndDate');
+    await queryRunner.dropColumn('vehicle', 'eventLockStartDate');
+    await queryRunner.dropColumn('vehicle', 'currentEventId');
+    await queryRunner.dropColumn('vehicle', 'isLockedForEvent');
 
     // Revert enum to original values
     await queryRunner.query(`
-      ALTER TABLE vehicles
+      ALTER TABLE vehicle
       MODIFY COLUMN status ENUM('available', 'unavailable', 'in_use')
       DEFAULT 'available'
     `);
