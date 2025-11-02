@@ -62,7 +62,6 @@ export class EventsService {
 
     const query = this.eventRepository
       .createQueryBuilder('event')
-      .leftJoinAndSelect('event.creator', 'creator')
       .leftJoinAndSelect('event.eventVehicles', 'eventVehicles')
       .leftJoinAndSelect('eventVehicles.vehicle', 'vehicle');
 
@@ -116,7 +115,7 @@ export class EventsService {
   async findOne(id: string): Promise<Event> {
     const event = await this.eventRepository.findOne({
       where: { id },
-      relations: ['creator', 'eventVehicles', 'eventVehicles.vehicle'],
+      relations: ['eventVehicles', 'eventVehicles.vehicle'],
     });
 
     if (!event) {

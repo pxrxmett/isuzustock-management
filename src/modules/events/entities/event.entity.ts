@@ -4,12 +4,9 @@ import {
   PrimaryGeneratedColumn,
   CreateDateColumn,
   UpdateDateColumn,
-  ManyToOne,
   OneToMany,
-  JoinColumn,
   Index,
 } from 'typeorm';
-import { Staff } from '../../staff/entities/staff.entity';
 import { EventVehicle } from './event-vehicle.entity';
 import { EventStatus } from './event-status.enum';
 import { EventType } from './event-type.enum';
@@ -60,10 +57,6 @@ export class Event {
 
   @Column({ type: 'varchar', length: 36, nullable: true })
   createdBy: string;
-
-  @ManyToOne(() => Staff, { nullable: true })
-  @JoinColumn({ name: 'createdBy' })
-  creator: Staff;
 
   @Column({ type: 'simple-array', nullable: true })
   assignedStaffIds: string[];
