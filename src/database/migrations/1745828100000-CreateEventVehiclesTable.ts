@@ -73,7 +73,7 @@ export class CreateEventVehiclesTable1745828100000 implements MigrationInterface
       new TableForeignKey({
         name: 'FK_event_vehicles_vehicleId',
         columnNames: ['vehicleId'],
-        referencedTableName: 'vehicles',
+        referencedTableName: 'vehicle',
         referencedColumnNames: ['id'],
         onDelete: 'CASCADE',
       }),
