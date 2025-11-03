@@ -23,6 +23,7 @@ import {
 } from '@nestjs/swagger';
 import { StockService } from '../services/stock.service';
 import { CreateVehicleDto } from '../dto/create-vehicle.dto';
+import { UpdateVehicleDto } from '../dto/update-vehicle.dto';
 import { UploadFileDto } from '../dto/upload-file.dto';
 import { Express } from 'express';
 
@@ -73,6 +74,20 @@ export class StockController {
   @ApiResponse({ status: 404, description: 'Vehicle not found.' })
   async findOne(@Param('id') id: string) {
     return await this.stockService.findOne(+id);
+  }
+
+  @Patch(':id')
+  @ApiOperation({ summary: 'Update vehicle information' })
+  @ApiParam({ name: 'id', description: 'Vehicle ID' })
+  @ApiResponse({ status: 200, description: 'Vehicle updated successfully.' })
+  @ApiResponse({ status: 404, description: 'Vehicle not found.' })
+  @ApiResponse({ status: 400, description: 'Bad Request - Invalid data or vehicle locked.' })
+  @ApiResponse({ status: 409, description: 'Conflict - VIN or Vehicle Code already exists.' })
+  async update(
+    @Param('id') id: string,
+    @Body() updateVehicleDto: UpdateVehicleDto
+  ) {
+    return await this.stockService.updateVehicle(+id, updateVehicleDto);
   }
 
   @Patch('vehicles/:id/status')
