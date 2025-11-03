@@ -218,28 +218,112 @@ export class EventsService {
   async assignMultipleVehicles(
     eventId: string,
     assignDto: AssignMultipleVehiclesDto,
-  ): Promise<{ success: number; failed: number; errors: string[] }> {
+  ): Promise<{
+    success: number;
+    failed: number;
+    totalRequested: number;
+    results: Array<{
+      vehicleId: number;
+      vehicleCode?: string;
+      success: boolean;
+      errorCode?: string;
+      errorMessage?: string;
+      errorDetail?: string;
+    }>;
+    hasPartialSuccess: boolean;
+    recommendation?: string;
+  }> {
     const event = await this.findOne(eventId);
-    const errors: string[] = [];
-    let success = 0;
-    let failed = 0;
+    const results = [];
+    let successCount = 0;
+    let failedCount = 0;
+    let hasFKError = false;
 
     for (const vehicleId of assignDto.vehicleIds) {
       try {
+        // Check if vehicle exists first
+        const vehicle = await this.vehicleRepository.findOne({
+          where: { id: vehicleId },
+        });
+
+        if (!vehicle) {
+          results.push({
+            vehicleId,
+            vehicleCode: null,
+            success: false,
+            errorCode: 'VEHICLE_NOT_FOUND',
+            errorMessage: 'Vehicle does not exist',
+            errorDetail: `No vehicle with ID ${vehicleId} found in database`,
+          });
+          failedCount++;
+          continue;
+        }
+
+        // Try to assign
         await this.assignVehicle(eventId, {
           vehicleId,
           assignedBy: assignDto.assignedBy,
           notes: assignDto.notes,
         });
-        success++;
+
+        results.push({
+          vehicleId,
+          vehicleCode: vehicle.vehicleCode,
+          success: true,
+        });
+        successCount++;
       } catch (error) {
-        failed++;
-        errors.push(`Vehicle ${vehicleId}: ${error.message}`);
+        const vehicle = await this.vehicleRepository.findOne({
+          where: { id: vehicleId },
+        });
+
+        // Detect error type
+        let errorCode = 'UNKNOWN_ERROR';
+        let errorMessage = error.message;
+        let errorDetail = error.message;
+
+        if (error.code === 'ER_NO_REFERENCED_ROW_2') {
+          errorCode = 'FK_CONSTRAINT_VIOLATION';
+          errorMessage = 'Database foreign key constraint error';
+          errorDetail =
+            'Vehicle exists in vehicle table but FK constraint is preventing assignment. This is a system configuration issue.';
+          hasFKError = true;
+        } else if (error instanceof ConflictException) {
+          errorCode = 'ALREADY_ASSIGNED';
+          errorMessage = 'Vehicle already assigned to this event';
+          errorDetail = `Vehicle ${vehicle?.vehicleCode || vehicleId} is already part of this event`;
+        } else if (error instanceof NotFoundException) {
+          errorCode = 'VEHICLE_NOT_FOUND';
+          errorMessage = 'Vehicle not found';
+          errorDetail = error.message;
+        }
+
+        results.push({
+          vehicleId,
+          vehicleCode: vehicle?.vehicleCode,
+          success: false,
+          errorCode,
+          errorMessage,
+          errorDetail,
+        });
+        failedCount++;
       }
     }
 
-    this.logger.log(`Batch assign to event ${eventId}: ${success} success, ${failed} failed`);
-    return { success, failed, errors };
+    this.logger.log(
+      `Batch assign to event ${eventId}: ${successCount} success, ${failedCount} failed`,
+    );
+
+    return {
+      success: successCount,
+      failed: failedCount,
+      totalRequested: assignDto.vehicleIds.length,
+      results,
+      hasPartialSuccess: successCount > 0 && failedCount > 0,
+      recommendation: hasFKError
+        ? 'Database schema issue detected. FK constraint needs to be verified. Please contact system administrator.'
+        : null,
+    };
   }
 
   // ลบรถออกจาก Event
