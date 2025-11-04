@@ -22,6 +22,15 @@ export class User {
   @Column({ name: 'last_name', length: 100, nullable: true })
   lastName: string;
 
+  @Column({ length: 20, nullable: true })
+  phone: string;
+
+  @Column({ length: 100, nullable: true })
+  position: string;
+
+  @Column({ length: 50, nullable: true })
+  nickname: string;
+
   @Column({
     type: 'enum',
     enum: ['admin', 'manager', 'staff', 'user'],
