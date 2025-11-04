@@ -1,8 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between, MoreThanOrEqual, LessThanOrEqual } from 'typeorm';
-import { Vehicle } from '../../stock/entities/vehicle.entity';
+import { Vehicle, VehicleStatus } from '../../stock/entities/vehicle.entity';
 import { Event } from '../../events/entities/event.entity';
+import { EventStatus } from '../../events/entities/event-status.enum';
 import { TestDrive } from '../../test-drive/entities/test-drive.entity';
 import { DashboardStatsDto } from '../dto/dashboard-stats.dto';
 import { VehicleStatsDto } from '../dto/vehicle-stats.dto';
@@ -48,7 +49,7 @@ export class AnalyticsService {
 
     const completedEventsThisMonth = await this.eventRepository.count({
       where: {
-        status: 'completed',
+        status: EventStatus.COMPLETED,
         updatedAt: Between(firstDayOfMonth, lastDayOfMonth),
       },
     });
@@ -178,7 +179,7 @@ export class AnalyticsService {
         sevenDaysLater: sevenDaysLater.toISOString().split('T')[0]
       })
       .andWhere('event.status IN (:...statuses)', {
-        statuses: ['planning', 'preparing', 'in_progress']
+        statuses: [EventStatus.PLANNING, EventStatus.PREPARING, EventStatus.IN_PROGRESS]
       })
       .orderBy('event.startDate', 'ASC')
       .limit(10)
@@ -187,8 +188,10 @@ export class AnalyticsService {
     const upcomingEvents = upcomingEventsQuery.map((event) => ({
       id: event.id,
       title: event.title,
-      type: event.type,
-      startDate: event.startDate,
+      type: event.type as string,
+      startDate: typeof event.startDate === 'string'
+        ? event.startDate
+        : event.startDate.toISOString().split('T')[0],
       vehicleCount: event.vehicleCount,
     }));
 
@@ -259,16 +262,16 @@ export class AnalyticsService {
       .select([
         'testDrive.id',
         'testDrive.customerName',
-        'testDrive.scheduledDate',
+        'testDrive.startTime',
         'testDrive.status',
         'vehicle.model',
       ])
-      .where('testDrive.scheduledDate >= :now', { now })
-      .andWhere('testDrive.scheduledDate <= :sevenDaysLater', { sevenDaysLater })
+      .where('testDrive.startTime >= :now', { now })
+      .andWhere('testDrive.startTime <= :sevenDaysLater', { sevenDaysLater })
       .andWhere('testDrive.status IN (:...statuses)', {
-        statuses: ['pending', 'confirmed']
+        statuses: ['pending', 'ongoing']
       })
-      .orderBy('testDrive.scheduledDate', 'ASC')
+      .orderBy('testDrive.startTime', 'ASC')
       .limit(10)
       .getMany();
 
@@ -276,13 +279,13 @@ export class AnalyticsService {
       id: td.id,
       customerName: td.customerName,
       vehicleModel: td.vehicle?.model || 'N/A',
-      scheduledDate: td.scheduledDate.toISOString().split('T')[0],
+      scheduledDate: td.startTime.toISOString().split('T')[0],
       status: td.status,
     }));
 
-    // คำนวณอัตราการยืนยัน
+    // คำนวณอัตราการยืนยัน (ongoing + completed)
     const confirmationRate = statusSummary.total > 0
-      ? ((statusSummary.confirmed + statusSummary.completed) / statusSummary.total) * 100
+      ? ((statusSummary.ongoing + statusSummary.completed) / statusSummary.total) * 100
       : 0;
 
     // คำนวณอัตราการยกเลิก
@@ -293,9 +296,9 @@ export class AnalyticsService {
     // ดึงข้อมูลรายเดือน (6 เดือนล่าสุด)
     const monthlyTrendQuery = await this.testDriveRepository
       .createQueryBuilder('testDrive')
-      .select("DATE_FORMAT(testDrive.scheduledDate, '%Y-%m')", 'month')
+      .select("DATE_FORMAT(testDrive.startTime, '%Y-%m')", 'month')
       .addSelect('COUNT(testDrive.id)', 'count')
-      .where('testDrive.scheduledDate >= DATE_SUB(NOW(), INTERVAL 6 MONTH)')
+      .where('testDrive.startTime >= DATE_SUB(NOW(), INTERVAL 6 MONTH)')
       .groupBy('month')
       .orderBy('month', 'DESC')
       .getRawMany();
@@ -320,14 +323,14 @@ export class AnalyticsService {
    */
   private async getVehicleStatusSummary() {
     const total = await this.vehicleRepository.count();
-    const available = await this.vehicleRepository.count({ where: { status: 'available' } });
-    const inUse = await this.vehicleRepository.count({ where: { status: 'in_use' } });
-    const maintenance = await this.vehicleRepository.count({ where: { status: 'maintenance' } });
+    const available = await this.vehicleRepository.count({ where: { status: VehicleStatus.AVAILABLE } });
+    const inUse = await this.vehicleRepository.count({ where: { status: VehicleStatus.IN_USE } });
+    const maintenance = await this.vehicleRepository.count({ where: { status: VehicleStatus.MAINTENANCE } });
     const lockedForEvent = await this.vehicleRepository.count({
-      where: { status: 'locked_for_event' }
+      where: { status: VehicleStatus.LOCKED_FOR_EVENT }
     });
     const unavailable = await this.vehicleRepository.count({
-      where: { status: 'unavailable' }
+      where: { status: VehicleStatus.UNAVAILABLE }
     });
 
     return {
@@ -345,12 +348,12 @@ export class AnalyticsService {
    */
   private async getEventStatusSummary() {
     const total = await this.eventRepository.count();
-    const planning = await this.eventRepository.count({ where: { status: 'planning' } });
-    const preparing = await this.eventRepository.count({ where: { status: 'preparing' } });
-    const inProgress = await this.eventRepository.count({ where: { status: 'in_progress' } });
-    const completed = await this.eventRepository.count({ where: { status: 'completed' } });
-    const cancelled = await this.eventRepository.count({ where: { status: 'cancelled' } });
-    const overdue = await this.eventRepository.count({ where: { status: 'overdue' } });
+    const planning = await this.eventRepository.count({ where: { status: EventStatus.PLANNING } });
+    const preparing = await this.eventRepository.count({ where: { status: EventStatus.PREPARING } });
+    const inProgress = await this.eventRepository.count({ where: { status: EventStatus.IN_PROGRESS } });
+    const completed = await this.eventRepository.count({ where: { status: EventStatus.COMPLETED } });
+    const cancelled = await this.eventRepository.count({ where: { status: EventStatus.CANCELLED } });
+    const overdue = await this.eventRepository.count({ where: { status: EventStatus.OVERDUE } });
 
     return {
       total,
@@ -369,16 +372,14 @@ export class AnalyticsService {
   private async getTestDriveStatusSummary() {
     const total = await this.testDriveRepository.count();
     const pending = await this.testDriveRepository.count({ where: { status: 'pending' } });
-    const confirmed = await this.testDriveRepository.count({ where: { status: 'confirmed' } });
-    const inProgress = await this.testDriveRepository.count({ where: { status: 'in_progress' } });
+    const ongoing = await this.testDriveRepository.count({ where: { status: 'ongoing' } });
     const completed = await this.testDriveRepository.count({ where: { status: 'completed' } });
     const cancelled = await this.testDriveRepository.count({ where: { status: 'cancelled' } });
 
     return {
       total,
       pending,
-      confirmed,
-      inProgress,
+      ongoing,
       completed,
       cancelled,
     };

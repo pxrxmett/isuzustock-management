@@ -6,8 +6,7 @@ export class TestDriveStatsDto {
     example: {
       total: 120,
       pending: 15,
-      confirmed: 25,
-      inProgress: 10,
+      ongoing: 25,
       completed: 65,
       cancelled: 5,
     },
@@ -15,8 +14,7 @@ export class TestDriveStatsDto {
   statusSummary: {
     total: number;
     pending: number;
-    confirmed: number;
-    inProgress: number;
+    ongoing: number;
     completed: number;
     cancelled: number;
   };
@@ -42,7 +40,7 @@ export class TestDriveStatsDto {
         customerName: 'นาย สมชาย ใจดี',
         vehicleModel: 'D-MAX Hi-Lander',
         scheduledDate: '2025-02-10',
-        status: 'confirmed',
+        status: 'pending',
       },
     ],
   })
