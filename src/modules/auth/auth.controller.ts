@@ -14,6 +14,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagg
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { Request } from 'express';
 import { LoginDto } from './dto/login.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 
 // เพิ่ม interface นี้เพื่อกำหนดประเภทของ Request ที่มี user property
 interface RequestWithUser extends Request {
@@ -113,6 +114,44 @@ export class AuthController {
       throw new HttpException(
         error.message || 'ไม่สามารถรีเฟรชโทเคนได้',
         error.status || HttpStatus.UNAUTHORIZED
+      );
+    }
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('change-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'เปลี่ยนรหัสผ่าน' })
+  @ApiBearerAuth()
+  @ApiResponse({
+    status: 200,
+    description: 'เปลี่ยนรหัสผ่านสำเร็จ'
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'รหัสผ่านปัจจุบันไม่ถูกต้อง'
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'ไม่ได้รับอนุญาต'
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'ไม่พบข้อมูลผู้ใช้'
+  })
+  async changePassword(
+    @Req() req: RequestWithUser,
+    @Body() changePasswordDto: ChangePasswordDto,
+  ) {
+    try {
+      return await this.authService.changePassword(
+        req.user.id,
+        changePasswordDto,
+      );
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'ไม่สามารถเปลี่ยนรหัสผ่านได้',
+        error.status || HttpStatus.BAD_REQUEST,
       );
     }
   }

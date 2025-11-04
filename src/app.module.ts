@@ -9,6 +9,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { StaffModule } from './modules/staff/staff.module';
 import { LineIntegrationModule } from './modules/line-integration/line-integration.module';
 import { EventsModule } from './modules/events/events.module';
+import { UsersModule } from './modules/users/users.module';
 import { AppController } from './app.controller';
 
 @Module({
@@ -26,6 +27,7 @@ import { AppController } from './app.controller';
       inject: [ConfigService],
     }),
     AuthModule,
+    UsersModule,
     StockModule,
     TestDriveModule,
     StaffModule,
