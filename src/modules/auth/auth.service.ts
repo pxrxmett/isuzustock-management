@@ -62,7 +62,7 @@ export class AuthService {
     this.logger.log(`Successful login for user: ${user.username}`);
 
     return {
-      access_token: this.jwtService.sign(payload),
+      accessToken: this.jwtService.sign(payload),
       user: {
         id: user.id,
         username: user.username,
@@ -136,7 +136,7 @@ export class AuthService {
 
       return {
         success: true,
-        access_token: this.jwtService.sign(payload),
+        accessToken: this.jwtService.sign(payload),
         user: {
           id: user.id,
           username: user.username,
@@ -172,7 +172,7 @@ export class AuthService {
 
       return {
         success: true,
-        access_token: this.jwtService.sign(payload),
+        accessToken: this.jwtService.sign(payload),
         user: {
           id: payload.id,
           username: payload.username,
