@@ -234,7 +234,14 @@ export class EventsService {
     recommendation?: string;
   }> {
     const event = await this.findOne(eventId);
-    const results = [];
+    const results: Array<{
+      vehicleId: number;
+      vehicleCode?: string;
+      success: boolean;
+      errorCode?: string;
+      errorMessage?: string;
+      errorDetail?: string;
+    }> = [];
     let successCount = 0;
     let failedCount = 0;
     let hasFKError = false;
@@ -249,7 +256,7 @@ export class EventsService {
         if (!vehicle) {
           results.push({
             vehicleId,
-            vehicleCode: null,
+            vehicleCode: undefined,
             success: false,
             errorCode: 'VEHICLE_NOT_FOUND',
             errorMessage: 'Vehicle does not exist',
@@ -322,7 +329,7 @@ export class EventsService {
       hasPartialSuccess: successCount > 0 && failedCount > 0,
       recommendation: hasFKError
         ? 'Database schema issue detected. FK constraint needs to be verified. Please contact system administrator.'
-        : null,
+        : undefined,
     };
   }
 
