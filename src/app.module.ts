@@ -10,6 +10,7 @@ import { StaffModule } from './modules/staff/staff.module';
 import { LineIntegrationModule } from './modules/line-integration/line-integration.module';
 import { EventsModule } from './modules/events/events.module';
 import { UsersModule } from './modules/users/users.module';
+import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { AppController } from './app.controller';
 
 @Module({
@@ -28,6 +29,7 @@ import { AppController } from './app.controller';
     }),
     AuthModule,
     UsersModule,
+    AnalyticsModule,
     StockModule,
     TestDriveModule,
     StaffModule,
