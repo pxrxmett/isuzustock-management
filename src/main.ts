@@ -49,18 +49,27 @@ async function bootstrap() {
     origin: (origin, callback) => {
       // Allow requests with no origin (mobile apps, Postman, curl)
       if (!origin) {
+        console.log('✅ CORS: Allowed request with no origin (mobile/Postman)');
         return callback(null, true);
       }
 
-      // Check if origin is in allowed list
-      const isAllowed = corsOrigins.some((allowed) =>
-        origin.startsWith(allowed) || allowed.startsWith(origin)
-      );
+      // Check if origin exactly matches or is a subdomain of allowed origins
+      const isAllowed = corsOrigins.some((allowed) => {
+        // Exact match
+        if (origin === allowed) return true;
+        // Check if origin starts with allowed (for subdomain matching)
+        if (origin.startsWith(allowed)) return true;
+        // Check if allowed starts with origin (for wildcard matching)
+        if (allowed.startsWith(origin)) return true;
+        return false;
+      });
 
       if (isAllowed) {
+        console.log(`✅ CORS: Allowed origin: ${origin}`);
         callback(null, true);
       } else {
-        console.warn(`⚠️  CORS blocked origin: ${origin}`);
+        console.warn(`❌ CORS blocked origin: ${origin}`);
+        console.warn(`   Allowed origins: ${corsOrigins.join(', ')}`);
         callback(new Error('Not allowed by CORS'));
       }
     },
