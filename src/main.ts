@@ -7,59 +7,66 @@ if (typeof globalThis.crypto === 'undefined') {
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
+import { validateEnvironment } from './config/env.validation';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  // Validate environment variables BEFORE creating app
+  validateEnvironment();
 
-  const isProduction = process.env.NODE_ENV === 'production';
-  
+  const app = await NestFactory.create(AppModule);
+  const configService = app.get(ConfigService);
+
+  // Get configuration from ConfigService
+  const port = configService.get<number>('app.port');
+  const nodeEnv = configService.get<string>('app.nodeEnv');
+  const corsOrigins = configService.get<string[]>('app.corsOrigins');
+  const isProduction = nodeEnv === 'production';
+
   // CRITICAL: Add raw HTTP handler for Railway health check at root
   const expressApp = app.getHttpAdapter().getInstance();
   expressApp.get('/', (req, res) => {
     res.status(200).json({
       status: 'ok',
       service: 'Stock Management API',
+      environment: nodeEnv,
       timestamp: new Date().toISOString()
     });
   });
   expressApp.get('/health', (req, res) => {
     res.status(200).json({
       status: 'healthy',
+      environment: nodeEnv,
       uptime: process.uptime(),
       timestamp: new Date().toISOString()
     });
   });
-  
-  // CORS Configuration
-  const allowedOrigins = [
-    'http://localhost:8080',
-    'http://localhost:4000',
-    'https://testdrive-liff-app-production.up.railway.app',
-    'http://testdrive-liff-app-production.up.railway.app'
-  ];
 
-  if (process.env.FRONTEND_URL) {
-    const frontendUrl = process.env.FRONTEND_URL;
-    allowedOrigins.push(frontendUrl);
-    
-    if (frontendUrl.startsWith('https://')) {
-      allowedOrigins.push(frontendUrl.replace('https://', 'http://'));
-    } else if (frontendUrl.startsWith('http://')) {
-      allowedOrigins.push(frontendUrl.replace('http://', 'https://'));
-    }
-  }
-
-  console.log('=== CORS Configuration ===');
-  console.log('Allowed Origins:', allowedOrigins);
-  console.log('========================');
-
+  // CORS Configuration (dynamic based on environment)
   app.enableCors({
-    origin: allowedOrigins,
+    origin: (origin, callback) => {
+      // Allow requests with no origin (mobile apps, Postman, curl)
+      if (!origin) {
+        return callback(null, true);
+      }
+
+      // Check if origin is in allowed list
+      const isAllowed = corsOrigins.some((allowed) =>
+        origin.startsWith(allowed) || allowed.startsWith(origin)
+      );
+
+      if (isAllowed) {
+        callback(null, true);
+      } else {
+        console.warn(`⚠️  CORS blocked origin: ${origin}`);
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Accept', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Accept', 'Authorization', 'X-Requested-With', 'Origin'],
     exposedHeaders: ['Authorization'],
     preflightContinue: false,
     optionsSuccessStatus: 204
@@ -90,28 +97,19 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('docs', app, document);
 
-  // Start server
-  const port = process.env.PORT || 3000;
+  // Start server on Railway's port (0.0.0.0 for Railway)
   await app.listen(port, '0.0.0.0');
 
-  // Log URLs based on environment
+  // Pretty startup logs
   console.log('');
-  console.log('================================');
-  if (isProduction) {
-    console.log('🚀 Backend API is running in PRODUCTION');
-    console.log('📡 Internal port:', port);
-    console.log('🌐 Public URL: https://isuzu-liff.up.railway.app');
-    console.log('📄 Swagger: https://isuzu-liff.up.railway.app/docs');
-    console.log('🔗 API Base: https://isuzu-liff.up.railway.app/api');
-    console.log('❤️  Health: https://isuzu-liff.up.railway.app/health');
-  } else {
-    console.log('🚀 Backend API is running in DEVELOPMENT');
-    console.log('📡 Local: http://localhost:' + port);
-    console.log('📄 Swagger: http://localhost:' + port + '/docs');
-    console.log('🔗 API Base: http://localhost:' + port + '/api');
-    console.log('❤️  Health: http://localhost:' + port + '/health');
-  }
-  console.log('================================');
+  console.log('==========================================================');
+  console.log(`🚀 Application is running in ${nodeEnv.toUpperCase()} mode`);
+  console.log(`📍 Server: http://localhost:${port}`);
+  console.log(`📡 API Endpoint: http://localhost:${port}/api`);
+  console.log(`📄 Swagger Docs: http://localhost:${port}/docs`);
+  console.log(`❤️  Health Check: http://localhost:${port}/health`);
+  console.log(`🌐 CORS Origins: ${corsOrigins.join(', ')}`);
+  console.log('==========================================================');
   console.log('');
 }
 
