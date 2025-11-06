@@ -37,8 +37,13 @@ import { AppController } from './app.controller';
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) =>
-        configService.get('database'),
+      useFactory: (configService: ConfigService) => {
+        const dbConfig = configService.get('database');
+        if (!dbConfig) {
+          throw new Error('Database configuration not found');
+        }
+        return dbConfig;
+      },
     }),
     AuthModule,
     UsersModule,
