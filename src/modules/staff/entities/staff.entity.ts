@@ -12,6 +12,7 @@ import { TestDrive } from '../../test-drive/entities/test-drive.entity';
 import { v4 as uuidv4 } from 'uuid';
 
 @Entity('staffs')
+@Index('IDX_STAFF_USERNAME', ['username'], { unique: true })
 export class Staff {
   @PrimaryColumn('uuid')
   id: string;
@@ -43,6 +44,13 @@ export class Staff {
 
   @Column()
   email: string;
+
+  // Username/Password Login fields
+  @Column({ unique: true, nullable: true })
+  username: string;
+
+  @Column({ name: 'password_hash', nullable: true })
+  passwordHash: string;
 
   @Column({ default: 'staff' })
   role: string;

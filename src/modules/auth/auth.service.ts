@@ -6,6 +6,7 @@ import * as bcrypt from 'bcrypt';
 import { LoginDto } from './dto/login.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { User } from './entities/user.entity';
+import { Staff } from '../staff/entities/staff.entity';
 
 @Injectable()
 export class AuthService {
@@ -15,54 +16,88 @@ export class AuthService {
     private jwtService: JwtService,
     @InjectRepository(User)
     private userRepository: Repository<User>,
+    @InjectRepository(Staff)
+    private staffRepository: Repository<Staff>,
   ) {}
 
   async login(loginDto: LoginDto) {
-    // ค้นหา user จาก database
-    const user = await this.userRepository.findOne({
-      where: { username: loginDto.username },
+    const { username, password } = loginDto;
+
+    // 1. ค้นหาจาก User table ก่อน
+    let user = await this.userRepository.findOne({
+      where: { username },
     });
 
-    // ตรวจสอบว่ามี user และรหัสผ่านถูกต้อง
+    let accountType = 'user';
+
+    // 2. ถ้าไม่เจอ ค้นหาจาก Staff table
     if (!user) {
-      this.logger.warn(`Failed login attempt for username: ${loginDto.username}`);
+      const staff = await this.staffRepository.findOne({
+        where: { username },
+      });
+
+      if (staff) {
+        accountType = 'staff';
+        // แปลง Staff เป็น User-like object
+        user = {
+          id: staff.id,
+          username: staff.username,
+          email: staff.email,
+          passwordHash: staff.passwordHash,
+          firstName: staff.firstName,
+          lastName: staff.lastName,
+          role: staff.role,
+          status: staff.status,
+        } as any;
+      }
+    }
+
+    // 3. ตรวจสอบว่ามี user/staff หรือไม่
+    if (!user || !user.passwordHash) {
+      this.logger.warn(`❌ Failed login attempt for username: ${username}`);
       throw new UnauthorizedException('รหัสผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
     }
 
-    // ตรวจสอบสถานะ user
+    // 4. ตรวจสอบสถานะ user
     if (user.status !== 'active') {
-      this.logger.warn(`Inactive user login attempt: ${loginDto.username}`);
+      this.logger.warn(`❌ Inactive ${accountType} login attempt: ${username}`);
       throw new UnauthorizedException('บัญชีผู้ใช้ถูกระงับหรือไม่ได้ใช้งาน');
     }
 
-    // เปรียบเทียบรหัสผ่านด้วย bcrypt
-    const isPasswordValid = await bcrypt.compare(
-      loginDto.password,
-      user.passwordHash,
-    );
+    // 5. เปรียบเทียบรหัสผ่านด้วย bcrypt
+    const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
 
     if (!isPasswordValid) {
-      this.logger.warn(`Invalid password for username: ${loginDto.username}`);
+      this.logger.warn(`❌ Invalid password for username: ${username}`);
       throw new UnauthorizedException('รหัสผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
     }
 
-    // อัปเดต lastLoginAt
-    await this.userRepository.update(user.id, {
-      lastLoginAt: new Date(),
-    });
+    // 6. อัปเดต lastLoginAt
+    if (accountType === 'user') {
+      await this.userRepository.update(user.id, {
+        lastLoginAt: new Date(),
+      });
+    } else {
+      await this.staffRepository.update(user.id, {
+        lineLastLoginAt: new Date(),
+      });
+    }
 
-    // สร้าง JWT payload
+    // 7. สร้าง JWT payload
     const payload = {
+      sub: user.id,
       id: user.id,
       username: user.username,
       email: user.email,
       role: user.role,
+      accountType, // 'user' or 'staff'
     };
 
-    this.logger.log(`Successful login for user: ${user.username}`);
+    this.logger.log(`✅ Successful ${accountType} login: ${user.username}`);
 
     return {
       accessToken: this.jwtService.sign(payload),
+      token: this.jwtService.sign(payload), // alias for consistency
       user: {
         id: user.id,
         username: user.username,
@@ -70,6 +105,7 @@ export class AuthService {
         firstName: user.firstName,
         lastName: user.lastName,
         role: user.role,
+        accountType,
       },
     };
   }
@@ -85,7 +121,35 @@ export class AuthService {
   // เพิ่มเมธอดสำหรับการตรวจสอบข้อมูลผู้ใช้ปัจจุบัน
   async getUserProfile(user: any) {
     try {
-      // ดึงข้อมูล user จาก database
+      const accountType = user.accountType || 'user';
+
+      // ดึงข้อมูลจาก User หรือ Staff ตาม accountType
+      if (accountType === 'staff') {
+        const staffData = await this.staffRepository.findOne({
+          where: { id: user.id },
+        });
+
+        if (!staffData) {
+          throw new UnauthorizedException('ไม่พบข้อมูลพนักงาน');
+        }
+
+        return {
+          id: staffData.id,
+          username: staffData.username,
+          email: staffData.email,
+          firstName: staffData.firstName,
+          lastName: staffData.lastName,
+          staffCode: staffData.staffCode,
+          department: staffData.department,
+          position: staffData.position,
+          role: staffData.role,
+          status: staffData.status,
+          lastLoginAt: staffData.lineLastLoginAt,
+          accountType: 'staff',
+        };
+      }
+
+      // Default: ดึงข้อมูล user จาก database
       const userData = await this.userRepository.findOne({
         where: { id: user.id },
         select: ['id', 'username', 'email', 'firstName', 'lastName', 'role', 'status', 'lastLoginAt'],
@@ -104,6 +168,7 @@ export class AuthService {
         role: userData.role,
         status: userData.status,
         lastLoginAt: userData.lastLoginAt,
+        accountType: 'user',
       };
     } catch (error) {
       this.logger.error(`เกิดข้อผิดพลาดในการดึงข้อมูลผู้ใช้: ${error.message}`);
@@ -207,11 +272,7 @@ export class AuthService {
     }
 
     // Hash รหัสผ่านใหม่
-    const saltRounds = 10;
-    const hashedPassword = await bcrypt.hash(
-      changePasswordDto.newPassword,
-      saltRounds,
-    );
+    const hashedPassword = await this.hashPassword(changePasswordDto.newPassword);
 
     // อัปเดตรหัสผ่าน
     await this.userRepository.update(userId, {
@@ -224,5 +285,25 @@ export class AuthService {
       success: true,
       message: 'เปลี่ยนรหัสผ่านเรียบร้อยแล้ว',
     };
+  }
+
+  /**
+   * Hash password with bcrypt
+   * @param password Plain text password
+   * @returns Hashed password
+   */
+  async hashPassword(password: string): Promise<string> {
+    const saltRounds = 10;
+    return bcrypt.hash(password, saltRounds);
+  }
+
+  /**
+   * Compare password with hashed password
+   * @param password Plain text password
+   * @param hashedPassword Hashed password from database
+   * @returns True if password matches
+   */
+  async comparePassword(password: string, hashedPassword: string): Promise<boolean> {
+    return bcrypt.compare(password, hashedPassword);
   }
 }
