@@ -1,67 +1,129 @@
 version: '3.8'
 
 services:
+  # ====================================
   # MySQL Database
+  # ====================================
   db:
     image: mysql:8.0
     container_name: stock-management-db
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: root123
-      MYSQL_DATABASE: stock_management
-      MYSQL_USER: testdrive
-      MYSQL_PASSWORD: testdrive123
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-root123}
+      MYSQL_DATABASE: ${DB_DATABASE:-stock_management}
+      MYSQL_USER: ${DB_USERNAME:-testdrive}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-testdrive123}
+      TZ: Asia/Bangkok
     ports:
-      - "3306:3306"
+      - "${DB_PORT:-3306}:3306"
     volumes:
       - db_data:/var/lib/mysql
+      - ./mysql-init:/docker-entrypoint-initdb.d  # For initial SQL scripts
     networks:
       - backend-network
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot123"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u${DB_USERNAME:-testdrive}", "-p${DB_PASSWORD:-testdrive123}"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 30s
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
 
-  # Backend API
+  # ====================================
+  # Backend API (Production Mode)
+  # ====================================
   backend:
     build:
       context: .
       dockerfile: Dockerfile
+      target: production
     container_name: stock-management-api
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "${PORT:-3000}:3000"
     environment:
+      # Node Environment
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 3000
+      TZ: Asia/Bangkok
+
       # Database Configuration
       DB_HOST: db
       DB_PORT: 3306
-      DB_USERNAME: testdrive
-      DB_PASSWORD: testdrive123
-      DB_DATABASE: stock_management
-      
+      DB_USERNAME: ${DB_USERNAME:-testdrive}
+      DB_PASSWORD: ${DB_PASSWORD:-testdrive123}
+      DB_DATABASE: ${DB_DATABASE:-stock_management}
+
       # LINE Configuration
-      LINE_CHANNEL_ID: ${LINE_CHANNEL_ID:-your-channel-id}
-      LINE_CHANNEL_SECRET: ${LINE_CHANNEL_SECRET:-your-channel-secret}
-      LINE_LIFF_ID: ${LINE_LIFF_ID:-your-liff-id}
-      
-      # JWT Secret
-      JWT_SECRET: ${JWT_SECRET:-my-secret-key-12345}
-      
-      # Server Configuration
-      PORT: 3000
-      NODE_ENV: development
-    volumes:
-      - .:/app
-      - /app/node_modules
+      LINE_CHANNEL_ID: ${LINE_CHANNEL_ID}
+      LINE_CHANNEL_SECRET: ${LINE_CHANNEL_SECRET}
+      LINE_LIFF_ID: ${LINE_LIFF_ID}
+
+      # JWT Secret (IMPORTANT: Change in production!)
+      JWT_SECRET: ${JWT_SECRET}
+
+      # CORS Configuration
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:8080}
     depends_on:
       db:
         condition: service_healthy
     networks:
       - backend-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    # Production: No volume mounts (use image only)
+    # For logs/uploads, use named volumes
+    # volumes:
+    #   - uploads:/app/uploads
+
+  # ====================================
+  # Backend API (Development Mode)
+  # ====================================
+  backend-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder
+    container_name: stock-management-api-dev
+    restart: unless-stopped
+    ports:
+      - "${DEV_PORT:-3001}:3000"
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      TZ: Asia/Bangkok
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_USERNAME: ${DB_USERNAME:-testdrive}
+      DB_PASSWORD: ${DB_PASSWORD:-testdrive123}
+      DB_DATABASE: ${DB_DATABASE:-stock_management}
+      LINE_CHANNEL_ID: ${LINE_CHANNEL_ID}
+      LINE_CHANNEL_SECRET: ${LINE_CHANNEL_SECRET}
+      LINE_LIFF_ID: ${LINE_LIFF_ID}
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-key}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:8080}
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/dist
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - backend-network
+    command: npm run start:dev
+    profiles:
+      - dev
 
 volumes:
   db_data:
+    driver: local
+  # uploads:
+  #   driver: local
 
 networks:
   backend-network:
