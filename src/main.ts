@@ -19,10 +19,10 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
 
-  // Get configuration from ConfigService
-  const port = configService.get<number>('app.port');
-  const nodeEnv = configService.get<string>('app.nodeEnv');
-  const corsOrigins = configService.get<string[]>('app.corsOrigins');
+  // Get configuration from ConfigService with fallbacks
+  const port = configService.get<number>('app.port') || 3000;
+  const nodeEnv = configService.get<string>('app.nodeEnv') || 'development';
+  const corsOrigins = configService.get<string[]>('app.corsOrigins') || ['http://localhost:3000'];
   const isProduction = nodeEnv === 'production';
 
   // CRITICAL: Add raw HTTP handler for Railway health check at root
