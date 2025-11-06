@@ -45,17 +45,17 @@ class EnvironmentVariables {
   @IsString()
   JWT_SECRET: string;
 
-  // LINE Credentials - optional สำหรับ LINE integration
+  // LINE Credentials - REQUIRED for LINE integration
   @IsString()
-  @IsOptional()
   LINE_CHANNEL_ID: string;
 
   @IsString()
-  @IsOptional()
   LINE_CHANNEL_SECRET: string;
 
   @IsString()
-  @IsOptional()
+  LINE_CHANNEL_ACCESS_TOKEN: string;
+
+  @IsString()
   LINE_LIFF_ID: string;
 
   @IsString()
@@ -133,4 +133,45 @@ export function validate(config: Record<string, unknown>) {
   console.log(`   Port: ${validatedConfig.PORT}`);
 
   return validatedConfig;
+}
+
+/**
+ * Simple validation function for use in main.ts
+ * Validates required environment variables before app startup
+ */
+export function validateEnvironment(): void {
+  const requiredVars = [
+    'DB_HOST',
+    'DB_USERNAME',
+    'DB_PASSWORD',
+    'JWT_SECRET',
+    'LINE_CHANNEL_ID',
+    'LINE_CHANNEL_SECRET',
+    'LINE_CHANNEL_ACCESS_TOKEN',
+    'LINE_LIFF_ID',
+  ];
+
+  const missingVars: string[] = [];
+
+  for (const varName of requiredVars) {
+    if (!process.env[varName]) {
+      missingVars.push(varName);
+    }
+  }
+
+  if (missingVars.length > 0) {
+    console.error('\n❌ Missing required environment variables:');
+    missingVars.forEach((varName) => {
+      console.error(`   - ${varName}`);
+    });
+    console.error('\n📝 Please check your .env file and ensure all required variables are set.\n');
+    process.exit(1);
+  }
+
+  // Validate JWT_SECRET length
+  if (process.env.JWT_SECRET && process.env.JWT_SECRET.length < 32) {
+    console.warn('\n⚠️  WARNING: JWT_SECRET should be at least 32 characters for security.\n');
+  }
+
+  console.log('✅ Environment variables validated');
 }
