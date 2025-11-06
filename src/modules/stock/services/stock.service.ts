@@ -254,7 +254,8 @@ export class StockService {
       await this.fileUploadRepository.save(fileUpload);
 
       const workbook = new ExcelJS.Workbook();
-      await workbook.xlsx.load(file.buffer);
+      // Type assertion for ExcelJS Buffer compatibility (runtime works correctly)
+      await workbook.xlsx.load(file.buffer as any);
       const worksheet = workbook.getWorksheet(1);
 
       if (!worksheet) {
