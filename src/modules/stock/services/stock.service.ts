@@ -5,6 +5,7 @@ import { Repository } from 'typeorm';
 import { Vehicle } from '../entities/vehicle.entity';
 import { FileUpload } from '../entities/file-upload.entity';
 import { CreateVehicleDto } from '../dto/create-vehicle.dto';
+import { UpdateVehicleDto } from '../dto/update-vehicle.dto';
 import * as ExcelJS from 'exceljs';
 import { Express } from 'express';
 import * as crypto from 'crypto';
@@ -48,6 +49,46 @@ export class StockService {
       throw new NotFoundException(`Vehicle #${id} not found`);
     }
     return vehicle;
+  }
+
+  async updateVehicle(id: number, updateVehicleDto: UpdateVehicleDto): Promise<Vehicle> {
+    const vehicle = await this.findOne(id);
+
+    // Check if vehicle is locked for event and prevent certain updates
+    if (vehicle.isLockedForEvent && updateVehicleDto.status && updateVehicleDto.status !== 'locked_for_event') {
+      throw new BadRequestException(
+        'ไม่สามารถเปลี่ยนสถานะรถที่ถูกล็อคสำหรับงาน (Event) ได้'
+      );
+    }
+
+    // Check if trying to update VIN number to one that already exists
+    if (updateVehicleDto.vinNumber && updateVehicleDto.vinNumber !== vehicle.vinNumber) {
+      const existingVehicle = await this.vehicleRepository.findOne({
+        where: { vinNumber: updateVehicleDto.vinNumber }
+      });
+      if (existingVehicle) {
+        throw new ConflictException(
+          `VIN Number ${updateVehicleDto.vinNumber} already exists in the system`
+        );
+      }
+    }
+
+    // Check if trying to update vehicle code to one that already exists
+    if (updateVehicleDto.vehicleCode && updateVehicleDto.vehicleCode !== vehicle.vehicleCode) {
+      const existingVehicle = await this.vehicleRepository.findOne({
+        where: { vehicleCode: updateVehicleDto.vehicleCode }
+      });
+      if (existingVehicle) {
+        throw new ConflictException(
+          `Vehicle Code ${updateVehicleDto.vehicleCode} already exists in the system`
+        );
+      }
+    }
+
+    // Update only provided fields
+    Object.assign(vehicle, updateVehicleDto);
+
+    return await this.vehicleRepository.save(vehicle);
   }
 
   async getVehicles(filters: any) {

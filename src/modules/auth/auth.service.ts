@@ -1,9 +1,10 @@
-import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
+import { Injectable, UnauthorizedException, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { LoginDto } from './dto/login.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { User } from './entities/user.entity';
 
 @Injectable()
@@ -61,7 +62,7 @@ export class AuthService {
     this.logger.log(`Successful login for user: ${user.username}`);
 
     return {
-      access_token: this.jwtService.sign(payload),
+      accessToken: this.jwtService.sign(payload),
       user: {
         id: user.id,
         username: user.username,
@@ -135,7 +136,7 @@ export class AuthService {
 
       return {
         success: true,
-        access_token: this.jwtService.sign(payload),
+        accessToken: this.jwtService.sign(payload),
         user: {
           id: user.id,
           username: user.username,
@@ -154,13 +155,13 @@ export class AuthService {
     try {
       // ในตัวอย่างนี้เราจะจำลองการตรวจสอบ LINE token
       // ในการใช้งานจริงคุณจะต้องเรียก LINE API เพื่อตรวจสอบ token
-      
+
       // สมมติว่าเราได้ข้อมูล LINE profile แล้ว
       const lineProfile = {
         userId: 'line-user-id',
         displayName: 'LINE User',
       };
-      
+
       // สร้าง payload สำหรับ JWT
       const payload = {
         id: 2, // สมมติเป็น ID ของผู้ใช้ที่เชื่อมโยงกับ LINE
@@ -168,10 +169,10 @@ export class AuthService {
         role: 'user',
         lineUserId: lineProfile.userId,
       };
-      
+
       return {
         success: true,
-        access_token: this.jwtService.sign(payload),
+        accessToken: this.jwtService.sign(payload),
         user: {
           id: payload.id,
           username: payload.username,
@@ -182,5 +183,46 @@ export class AuthService {
       this.logger.error(`เกิดข้อผิดพลาดในการตรวจสอบ LINE token: ${error.message}`);
       throw new UnauthorizedException('ไม่สามารถตรวจสอบบัญชี LINE ได้');
     }
+  }
+
+  // เมธอดสำหรับการเปลี่ยนรหัสผ่าน
+  async changePassword(userId: string, changePasswordDto: ChangePasswordDto) {
+    // ค้นหา user
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('ไม่พบข้อมูลผู้ใช้');
+    }
+
+    // ตรวจสอบรหัสผ่านปัจจุบัน
+    const isCurrentPasswordValid = await bcrypt.compare(
+      changePasswordDto.currentPassword,
+      user.passwordHash,
+    );
+
+    if (!isCurrentPasswordValid) {
+      throw new BadRequestException('รหัสผ่านปัจจุบันไม่ถูกต้อง');
+    }
+
+    // Hash รหัสผ่านใหม่
+    const saltRounds = 10;
+    const hashedPassword = await bcrypt.hash(
+      changePasswordDto.newPassword,
+      saltRounds,
+    );
+
+    // อัปเดตรหัสผ่าน
+    await this.userRepository.update(userId, {
+      passwordHash: hashedPassword,
+    });
+
+    this.logger.log(`รหัสผ่านของผู้ใช้ ${user.username} ถูกเปลี่ยนแปลงเรียบร้อยแล้ว`);
+
+    return {
+      success: true,
+      message: 'เปลี่ยนรหัสผ่านเรียบร้อยแล้ว',
+    };
   }
 }
