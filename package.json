@@ -23,7 +23,15 @@
   "migration:generate": "npm run typeorm migration:generate -- -d src/database/data-source.ts",
   "migration:run": "npm run typeorm migration:run -- -d src/database/data-source.ts",
   "migration:revert": "npm run typeorm migration:revert -- -d src/database/data-source.ts",
-  "migration:show": "npm run typeorm migration:show -- -d src/database/data-source.ts"
+  "migration:show": "npm run typeorm migration:show -- -d src/database/data-source.ts",
+  "docker:build": "docker build -t stock-management-api .",
+  "docker:build:prod": "docker build --target production -t stock-management-api:prod .",
+  "docker:run": "docker run -p 3000:3000 --env-file .env stock-management-api",
+  "docker:up": "docker-compose up -d",
+  "docker:up:dev": "docker-compose --profile dev up -d backend-dev",
+  "docker:down": "docker-compose down",
+  "docker:logs": "docker-compose logs -f backend",
+  "docker:rebuild": "docker-compose up -d --build"
  },
  "dependencies": {
   "@nestjs/common": "^11.0.1",
