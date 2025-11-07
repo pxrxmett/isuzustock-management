@@ -21,10 +21,66 @@ export class StaffService {
   }
 
   async findOne(id: string): Promise<Staff> {
-    const staff = await this.staffRepository.findOne({ where: { id } });
+    console.log('🔎 Searching staff by UUID:', id);
+
+    const staff = await this.staffRepository.findOne({
+      where: { id },
+      select: [
+        'id',
+        'staffCode',
+        'firstName',
+        'lastName',
+        'position',
+        'department',
+        'phone',
+        'email',
+        'role',
+        'status',
+        'lineUserId',
+        'lineDisplayName',
+        'linePictureUrl',
+        'isLineLinked',
+      ],
+    });
+
     if (!staff) {
+      console.error('❌ Staff not found with UUID:', id);
       throw new NotFoundException(`Staff with ID ${id} not found`);
     }
+
+    console.log('✅ Staff found:', staff.staffCode);
+    return staff;
+  }
+
+  async findByStaffCode(staffCode: string): Promise<Staff> {
+    console.log('🔎 Searching staff by code:', staffCode);
+
+    const staff = await this.staffRepository.findOne({
+      where: { staffCode },
+      select: [
+        'id',
+        'staffCode',
+        'firstName',
+        'lastName',
+        'position',
+        'department',
+        'phone',
+        'email',
+        'role',
+        'status',
+        'lineUserId',
+        'lineDisplayName',
+        'linePictureUrl',
+        'isLineLinked',
+      ],
+    });
+
+    if (!staff) {
+      console.error('❌ Staff not found with code:', staffCode);
+      throw new NotFoundException(`Staff with code ${staffCode} not found`);
+    }
+
+    console.log('✅ Staff found:', staff.id);
     return staff;
   }
 

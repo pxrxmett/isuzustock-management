@@ -34,11 +34,25 @@ export class StaffController {
     return this.staffService.findAll();
   }
 
-  @Get(':id')
-  @ApiOperation({ summary: 'ดูข้อมูลพนักงานตาม ID' })
+  @Get(':identifier')
+  @ApiOperation({ summary: 'ดูข้อมูลพนักงานตาม ID หรือ staffCode' })
   @ApiResponse({ status: 200, description: 'แสดงข้อมูลพนักงาน' })
-  findOne(@Param('id') id: string) {
-    return this.staffService.findOne(id);
+  @ApiResponse({ status: 404, description: 'ไม่พบข้อมูลพนักงาน' })
+  findOne(@Param('identifier') identifier: string) {
+    console.log('📍 GET /api/staffs/:identifier');
+    console.log('🔍 Identifier:', identifier);
+
+    // ตรวจสอบว่าเป็น UUID หรือ staffCode
+    // UUID format: 8-4-4-4-12 hexadecimal characters
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(identifier);
+
+    if (isUUID) {
+      console.log('✅ Detected UUID - Searching by ID');
+      return this.staffService.findOne(identifier);
+    } else {
+      console.log('✅ Detected staffCode - Searching by code');
+      return this.staffService.findByStaffCode(identifier);
+    }
   }
 
   // เพิ่มเมธอดอื่นๆ เช่น update, delete ตามต้องการ
