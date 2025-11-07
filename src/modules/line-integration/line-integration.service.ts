@@ -25,8 +25,26 @@ export class LineIntegrationService {
       const { lineUserId } = checkLineDto;
 
       // ตรวจสอบว่า lineUserId มีการเชื่อมโยงกับพนักงานหรือไม่
+      // ✅ ระบุ columns ที่ต้องการเพื่อหลีกเลี่ยง SELECT * ที่จะหา username
       const existingStaff = await this.staffRepository.findOne({
         where: { lineUserId },
+        select: [
+          'id',
+          'staffCode',
+          'firstName',
+          'lastName',
+          'position',
+          'department',
+          'phone',
+          'email',
+          'role',
+          'status',
+          'lineUserId',
+          'lineDisplayName',
+          'linePictureUrl',
+          'lineLastLoginAt',
+          'isLineLinked',
+        ],
       });
 
       return {
@@ -34,8 +52,8 @@ export class LineIntegrationService {
         staffInfo: existingStaff
           ? {
               id: existingStaff.id,
-              staffCode: existingStaff.staffCode, // แก้ไขจาก staff_code เป็น staffCode
-              fullName: `${existingStaff.firstName} ${existingStaff.lastName}`, // แก้ไขจาก first_name, last_name เป็น firstName, lastName
+              staffCode: existingStaff.staffCode,
+              fullName: `${existingStaff.firstName} ${existingStaff.lastName}`,
               department: existingStaff.department,
             }
           : null,
@@ -59,8 +77,10 @@ export class LineIntegrationService {
       const { staffCode, lineUserId, lineAccessToken } = linkDto;
 
       // 1. ตรวจสอบว่า line user id นี้เชื่อมโยงกับพนักงานอื่นไปแล้วหรือไม่
+      // ✅ ระบุ columns ที่ต้องการ
       const existingLinkedStaff = await this.staffRepository.findOne({
         where: { lineUserId },
+        select: ['id', 'staffCode', 'lineUserId'],
       });
 
       if (existingLinkedStaff) {
@@ -71,8 +91,26 @@ export class LineIntegrationService {
       }
 
       // 2. ตรวจสอบว่ามีพนักงานที่มีรหัสตามที่ระบุหรือไม่
+      // ✅ ระบุ columns ที่ต้องการ
       const staff = await this.staffRepository.findOne({
-        where: { staffCode: staffCode }, // แก้ไขจาก staff_code เป็น staffCode
+        where: { staffCode: staffCode },
+        select: [
+          'id',
+          'staffCode',
+          'firstName',
+          'lastName',
+          'position',
+          'department',
+          'phone',
+          'email',
+          'role',
+          'status',
+          'lineUserId',
+          'lineDisplayName',
+          'linePictureUrl',
+          'lineLastLoginAt',
+          'isLineLinked',
+        ],
       });
 
       if (!staff) {
@@ -141,8 +179,26 @@ export class LineIntegrationService {
    */
   async getStaffById(staffId: string) {
     try {
+      // ✅ ระบุ columns ที่ต้องการ
       const staff = await this.staffRepository.findOne({
         where: { id: staffId },
+        select: [
+          'id',
+          'staffCode',
+          'firstName',
+          'lastName',
+          'position',
+          'department',
+          'phone',
+          'email',
+          'role',
+          'status',
+          'lineUserId',
+          'lineDisplayName',
+          'linePictureUrl',
+          'lineLastLoginAt',
+          'isLineLinked',
+        ],
       });
 
       if (!staff) {
@@ -151,9 +207,9 @@ export class LineIntegrationService {
 
       return {
         id: staff.id,
-        staffCode: staff.staffCode, // แก้ไขจาก staff_code เป็น staffCode
-        firstName: staff.firstName, // แก้ไขจาก first_name เป็น firstName
-        lastName: staff.lastName, // แก้ไขจาก last_name เป็น lastName
+        staffCode: staff.staffCode,
+        firstName: staff.firstName,
+        lastName: staff.lastName,
         position: staff.position,
         department: staff.department,
         status: staff.status,
@@ -168,11 +224,11 @@ export class LineIntegrationService {
       };
     } catch (error) {
       this.logger.error(`การดึงข้อมูลพนักงานล้มเหลว: ${error.message}`);
-      
+
       if (error instanceof HttpException) {
         throw error;
       }
-      
+
       throw new HttpException(
         'เกิดข้อผิดพลาดในการดึงข้อมูลพนักงาน',
         HttpStatus.INTERNAL_SERVER_ERROR,
