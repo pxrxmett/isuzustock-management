@@ -69,6 +69,18 @@ export class LineIntegrationService {
 
       const token = this.jwtService.sign(payload);
 
+      // Log token creation for debugging
+      console.log('🔑 Token created for staff:', existingStaff.staffCode);
+      console.log('📦 Token payload:', JSON.stringify(payload, null, 2));
+
+      // Verify token can be decoded (for debugging)
+      try {
+        const decoded = this.jwtService.decode(token);
+        console.log('✅ Token decoded successfully, keys:', Object.keys(decoded));
+      } catch (err) {
+        console.error('❌ Token decode failed:', err.message);
+      }
+
       // อัปเดต lastLoginAt
       await this.staffRepository.update(existingStaff.id, {
         lineLastLoginAt: new Date(),
@@ -78,7 +90,7 @@ export class LineIntegrationService {
 
       return {
         registered: true,
-        token: token, // ← JWT token สำหรับ Frontend
+        access_token: token, // ⭐ เปลี่ยนจาก "token" เป็น "access_token" เพื่อความสอดคล้อง
         user: {
           id: existingStaff.id,
           staffCode: existingStaff.staffCode,
