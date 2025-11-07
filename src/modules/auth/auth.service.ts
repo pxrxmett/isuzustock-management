@@ -30,29 +30,36 @@ export class AuthService {
 
     let accountType = 'user';
 
+    /*
+     * ⏸️ TEMPORARILY DISABLED - Staff Username/Password Login
+     * TODO: Enable when adding username/password columns to staffs table
+     *
+     * NOTE: Staff login now uses LINE Integration only
+     * Use /api/line-integration/check endpoint for staff authentication
+     */
     // 2. ถ้าไม่เจอ ค้นหาจาก Staff table
-    if (!user) {
-      const staff = await this.staffRepository.findOne({
-        where: { username },
-      });
+    // if (!user) {
+    //   const staff = await this.staffRepository.findOne({
+    //     where: { username },
+    //   });
+    //
+    //   if (staff) {
+    //     accountType = 'staff';
+    //     // แปลง Staff เป็น User-like object
+    //     user = {
+    //       id: staff.id,
+    //       username: staff.username,
+    //       email: staff.email,
+    //       passwordHash: staff.passwordHash,
+    //       firstName: staff.firstName,
+    //       lastName: staff.lastName,
+    //       role: staff.role,
+    //       status: staff.status,
+    //     } as any;
+    //   }
+    // }
 
-      if (staff) {
-        accountType = 'staff';
-        // แปลง Staff เป็น User-like object
-        user = {
-          id: staff.id,
-          username: staff.username,
-          email: staff.email,
-          passwordHash: staff.passwordHash,
-          firstName: staff.firstName,
-          lastName: staff.lastName,
-          role: staff.role,
-          status: staff.status,
-        } as any;
-      }
-    }
-
-    // 3. ตรวจสอบว่ามี user/staff หรือไม่
+    // 3. ตรวจสอบว่ามี user หรือไม่ (Admin only)
     if (!user || !user.passwordHash) {
       this.logger.warn(`❌ Failed login attempt for username: ${username}`);
       throw new UnauthorizedException('รหัสผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
@@ -125,28 +132,38 @@ export class AuthService {
 
       // ดึงข้อมูลจาก User หรือ Staff ตาม accountType
       if (accountType === 'staff') {
-        const staffData = await this.staffRepository.findOne({
-          where: { id: user.id },
-        });
+        /*
+         * ⏸️ TEMPORARILY DISABLED - Staff Profile with Username
+         * NOTE: Staff entity no longer has username field
+         * Staff authentication is LINE-only via /api/line-integration/check
+         */
+        // const staffData = await this.staffRepository.findOne({
+        //   where: { id: user.id },
+        // });
 
-        if (!staffData) {
-          throw new UnauthorizedException('ไม่พบข้อมูลพนักงาน');
-        }
+        // if (!staffData) {
+        //   throw new UnauthorizedException('ไม่พบข้อมูลพนักงาน');
+        // }
 
-        return {
-          id: staffData.id,
-          username: staffData.username,
-          email: staffData.email,
-          firstName: staffData.firstName,
-          lastName: staffData.lastName,
-          staffCode: staffData.staffCode,
-          department: staffData.department,
-          position: staffData.position,
-          role: staffData.role,
-          status: staffData.status,
-          lastLoginAt: staffData.lineLastLoginAt,
-          accountType: 'staff',
-        };
+        // return {
+        //   id: staffData.id,
+        //   username: staffData.username,  // ❌ doesn't exist
+        //   email: staffData.email,
+        //   firstName: staffData.firstName,
+        //   lastName: staffData.lastName,
+        //   staffCode: staffData.staffCode,
+        //   department: staffData.department,
+        //   position: staffData.position,
+        //   role: staffData.role,
+        //   status: staffData.status,
+        //   lastLoginAt: staffData.lineLastLoginAt,
+        //   accountType: 'staff',
+        // };
+
+        // Staff should use LINE integration endpoints instead
+        throw new UnauthorizedException(
+          'Staff accounts must authenticate via LINE integration',
+        );
       }
 
       // Default: ดึงข้อมูล user จาก database
