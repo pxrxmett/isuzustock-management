@@ -86,9 +86,22 @@ export class AuthController {
     description: 'ไม่ได้รับอนุญาตให้เข้าถึง'
   })
   async getProfile(@Req() req: RequestWithUser) { // เปลี่ยนประเภทจาก Request เป็น RequestWithUser
+    console.log('📍 GET /api/auth/me called');
+    console.log('👤 req.user:', JSON.stringify(req.user, null, 2));
+
+    if (!req.user) {
+      console.error('❌ No user in request');
+      throw new HttpException(
+        'No user data in request',
+        HttpStatus.UNAUTHORIZED
+      );
+    }
+
     try {
+      console.log('✅ Returning user profile for:', req.user.id);
       return await this.authService.getUserProfile(req.user);
     } catch (error) {
+      console.error('❌ Error in getUserProfile:', error.message);
       throw new HttpException(
         error.message || 'ไม่สามารถดึงข้อมูลผู้ใช้ได้',
         error.status || HttpStatus.UNAUTHORIZED
