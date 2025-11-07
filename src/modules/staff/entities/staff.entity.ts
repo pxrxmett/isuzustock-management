@@ -12,6 +12,7 @@ import { TestDrive } from '../../test-drive/entities/test-drive.entity';
 import { v4 as uuidv4 } from 'uuid';
 
 @Entity('staffs')
+// ❌ ลบบรรทัดนี้: @Index('IDX_STAFF_USERNAME', ['username'], { unique: true })
 export class Staff {
   @PrimaryColumn('uuid')
   id: string;
@@ -44,6 +45,14 @@ export class Staff {
   @Column()
   email: string;
 
+  // ❌ ลบ 2 บรรทัดนี้:
+  // @Column({ unique: true, nullable: true })
+  // username: string;
+
+  // ❌ ลบ 2 บรรทัดนี้:
+  // @Column({ name: 'password_hash', nullable: true })
+  // passwordHash: string;
+
   @Column({ default: 'staff' })
   role: string;
 
@@ -63,7 +72,6 @@ export class Staff {
   @Column({ name: 'line_last_login_at', nullable: true })
   lineLastLoginAt: Date;
 
-  // ⭐ เพิ่มบรรทัดนี้
   @Column({ name: 'is_line_linked', type: 'tinyint', default: 0 })
   isLineLinked: boolean;
 

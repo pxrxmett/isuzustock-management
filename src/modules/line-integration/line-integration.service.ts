@@ -1,5 +1,6 @@
 import { Injectable, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { JwtService } from '@nestjs/jwt';
 import { Repository } from 'typeorm';
 import { Staff } from '../staff/entities/staff.entity';
 import { CheckLineRegistrationDto } from './dto/check-line-registration.dto';
@@ -12,13 +13,14 @@ export class LineIntegrationService {
 
   constructor(
     @InjectRepository(Staff)
-    private staffRepository: Repository<Staff>
+    private staffRepository: Repository<Staff>,
+    private jwtService: JwtService,
   ) {}
 
   /**
    * ตรวจสอบการลงทะเบียน LINE
    * @param checkLineDto ข้อมูลการตรวจสอบ
-   * @returns ผลการตรวจสอบว่ามีการลงทะเบียนหรือไม่
+   * @returns ผลการตรวจสอบว่ามีการลงทะเบียนหรือไม่ พร้อม JWT token
    */
   async checkLineRegistration(checkLineDto: CheckLineRegistrationDto) {
     try {
@@ -47,19 +49,51 @@ export class LineIntegrationService {
         ],
       });
 
+      // ถ้าไม่พบการลงทะเบียน
+      if (!existingStaff) {
+        return {
+          registered: false,
+          staffInfo: null,
+        };
+      }
+
+      // พบการลงทะเบียน - Generate JWT token
+      const payload = {
+        sub: existingStaff.id,
+        id: existingStaff.id,
+        staffCode: existingStaff.staffCode,
+        lineUserId: existingStaff.lineUserId,
+        role: existingStaff.role || 'staff',
+        department: existingStaff.department,
+      };
+
+      const token = this.jwtService.sign(payload);
+
+      // อัปเดต lastLoginAt
+      await this.staffRepository.update(existingStaff.id, {
+        lineLastLoginAt: new Date(),
+      });
+
+      this.logger.log(`✅ LINE login successful for staff: ${existingStaff.staffCode} (${existingStaff.lineUserId})`);
+
       return {
-        registered: !!existingStaff,
-        staffInfo: existingStaff
-          ? {
-              id: existingStaff.id,
-              staffCode: existingStaff.staffCode,
-              fullName: `${existingStaff.firstName} ${existingStaff.lastName}`,
-              department: existingStaff.department,
-            }
-          : null,
+        registered: true,
+        token: token, // ← JWT token สำหรับ Frontend
+        user: {
+          id: existingStaff.id,
+          staffCode: existingStaff.staffCode,
+          fullName: `${existingStaff.firstName} ${existingStaff.lastName}`,
+          firstName: existingStaff.firstName,
+          lastName: existingStaff.lastName,
+          department: existingStaff.department,
+          position: existingStaff.position,
+          role: existingStaff.role || 'staff',
+          lineUserId: existingStaff.lineUserId,
+          lineDisplayName: existingStaff.lineDisplayName,
+        },
       };
     } catch (error) {
-      this.logger.error(`การตรวจสอบการลงทะเบียน LINE ล้มเหลว: ${error.message}`);
+      this.logger.error(`❌ การตรวจสอบการลงทะเบียน LINE ล้มเหลว: ${error.message}`);
       throw new HttpException(
         'เกิดข้อผิดพลาดในการตรวจสอบการลงทะเบียน LINE',
         HttpStatus.INTERNAL_SERVER_ERROR,

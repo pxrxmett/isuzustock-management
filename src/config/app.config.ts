@@ -10,9 +10,16 @@ export default registerAs('app', () => {
 
   // Dynamic CORS origins based on environment
   const getCorsOrigins = (): string[] => {
+    // Get additional CORS origins from environment (comma-separated)
+    const additionalOrigins = process.env.CORS_ORIGIN
+      ? process.env.CORS_ORIGIN.split(',').map(o => o.trim())
+      : [];
+
     if (isProduction) {
-      // Production: Only allow production frontends
-      return [frontendUrl, adminUrl];
+      // Production: Only allow production frontends + additional origins
+      const origins = [frontendUrl, adminUrl, ...additionalOrigins];
+      // Remove duplicates
+      return [...new Set(origins)];
     }
 
     // Development: Allow both local and production URLs for testing
@@ -22,6 +29,7 @@ export default registerAs('app', () => {
       'http://localhost:8080', // Admin Dashboard local
       frontendUrl, // Production LIFF App
       adminUrl, // Production Admin Dashboard
+      ...additionalOrigins, // Additional CORS origins
     ];
   };
 
