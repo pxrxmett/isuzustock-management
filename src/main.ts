@@ -11,6 +11,7 @@ import { ConfigService } from '@nestjs/config';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { validateEnvironment } from './config/env.validation';
+import { DataSource } from 'typeorm';
 
 async function bootstrap() {
   // Validate environment variables BEFORE creating app
@@ -24,6 +25,19 @@ async function bootstrap() {
   const nodeEnv = configService.get<string>('app.nodeEnv') || 'development';
   const corsOrigins = configService.get<string[]>('app.corsOrigins') || ['http://localhost:3000'];
   const isProduction = nodeEnv === 'production';
+
+  // Run database migrations automatically in production
+  if (isProduction) {
+    try {
+      console.log('🔄 Running database migrations...');
+      const dataSource = app.get(DataSource);
+      await dataSource.runMigrations();
+      console.log('✅ Database migrations completed successfully');
+    } catch (error) {
+      console.error('❌ Migration failed:', error);
+      // Continue anyway - migrations might already be applied
+    }
+  }
 
   // CRITICAL: Add raw HTTP handler for Railway health check at root
   const expressApp = app.getHttpAdapter().getInstance();

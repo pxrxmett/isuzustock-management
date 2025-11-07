@@ -1,0 +1,80 @@
+# =============================================================================
+# Railway Environment Variables - Ready to Paste
+# =============================================================================
+#
+# INSTRUCTIONS:
+# 1. Go to Railway Dashboard → Your Backend Service → Variables Tab
+# 2. Click "RAW EDITOR" button (top right)
+# 3. Copy ALL lines below (except comments starting with #)
+# 4. Paste into Railway's Raw Editor
+# 5. Replace the placeholder values marked with <...>
+# 6. Click "Save" or "Update Variables"
+#
+# =============================================================================
+
+# Application Settings
+NODE_ENV=production
+PORT=3000
+
+# Database Configuration
+# ⚠️ IMPORTANT: Get these from Railway MySQL Service Variables
+# Go to: Railway Dashboard → MySQL Service → Variables Tab
+# Copy the ACTUAL VALUES (not the references):
+DB_HOST=<COPY_FROM_MYSQL_SERVICE_MYSQLHOST>
+DB_PORT=<COPY_FROM_MYSQL_SERVICE_MYSQLPORT>
+DB_USERNAME=<COPY_FROM_MYSQL_SERVICE_MYSQLUSER>
+DB_PASSWORD=<COPY_FROM_MYSQL_SERVICE_MYSQLPASSWORD>
+DB_DATABASE=stock_management
+
+# Security - JWT Secret
+# ✅ You already have this generated, keep it as is:
+JWT_SECRET=52fb0ce6ecee59e9adea70e88fd7c4a9bf6cdcac3ebeff354b2ab8fb97b2ae0c
+
+# LINE Integration
+# ⚠️ Get these from LINE Developers Console: https://developers.line.biz/console/
+LINE_CHANNEL_ID=2006746784
+LINE_CHANNEL_SECRET=<GET_FROM_LINE_DEVELOPERS_CONSOLE>
+LINE_CHANNEL_ACCESS_TOKEN=<GET_FROM_LINE_DEVELOPERS_CONSOLE>
+LINE_LIFF_ID=2006746784-e1y9NRqn
+
+# Frontend URLs
+FRONTEND_URL=https://testdrive-liff-app-production.up.railway.app
+ADMIN_URL=https://your-admin-dashboard.railway.app
+
+# =============================================================================
+# HOW TO GET EACH VALUE:
+# =============================================================================
+#
+# DATABASE VALUES (DB_HOST, DB_PORT, DB_USERNAME, DB_PASSWORD):
+# -----------------------------------------------------------------
+# 1. Go to Railway Dashboard
+# 2. Click on your MySQL Service (the database icon)
+# 3. Click "Variables" tab
+# 4. You will see these variables with ACTUAL values:
+#    - MYSQLHOST → copy this to DB_HOST
+#    - MYSQLPORT → copy this to DB_PORT
+#    - MYSQLUSER → copy this to DB_USERNAME
+#    - MYSQLPASSWORD → copy this to DB_PASSWORD
+#
+# Example:
+# If you see: MYSQLHOST = monorail.proxy.rlwy.net
+# Then use: DB_HOST=monorail.proxy.rlwy.net
+#
+# LINE CREDENTIALS:
+# -----------------------------------------------------------------
+# 1. Go to https://developers.line.biz/console/
+# 2. Login with your LINE account
+# 3. Select your Provider
+# 4. Click on your Channel (or create one)
+# 5. In "Basic Settings" tab:
+#    - Copy "Channel secret" → paste to LINE_CHANNEL_SECRET
+# 6. In "Messaging API" tab:
+#    - Click "Issue" button for Channel access token
+#    - Copy the long token → paste to LINE_CHANNEL_ACCESS_TOKEN
+#
+# JWT_SECRET:
+# -----------------------------------------------------------------
+# ✅ Already generated and in use. Keep the current value:
+# 52fb0ce6ecee59e9adea70e88fd7c4a9bf6cdcac3ebeff354b2ab8fb97b2ae0c
+#
+# =============================================================================
