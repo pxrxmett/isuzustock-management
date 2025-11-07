@@ -7,7 +7,8 @@ import {
   HttpException,
   Get,
   Req,
-  UseGuards
+  UseGuards,
+  UnauthorizedException
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
@@ -87,26 +88,21 @@ export class AuthController {
   })
   async getProfile(@Req() req: RequestWithUser) { // เปลี่ยนประเภทจาก Request เป็น RequestWithUser
     console.log('📍 GET /api/auth/me called');
-    console.log('👤 req.user:', JSON.stringify(req.user, null, 2));
+    console.log('👤 req.user:', req.user);
 
     if (!req.user) {
       console.error('❌ No user in request');
-      throw new HttpException(
-        'No user data in request',
-        HttpStatus.UNAUTHORIZED
-      );
+      throw new UnauthorizedException('Authentication failed');
     }
 
-    try {
-      console.log('✅ Returning user profile for:', req.user.id);
-      return await this.authService.getUserProfile(req.user);
-    } catch (error) {
-      console.error('❌ Error in getUserProfile:', error.message);
-      throw new HttpException(
-        error.message || 'ไม่สามารถดึงข้อมูลผู้ใช้ได้',
-        error.status || HttpStatus.UNAUTHORIZED
-      );
-    }
+    console.log('✅ Returning user profile for:', req.user.id);
+
+    // ✅ Return req.user โดยตรง - ไม่ต้อง query database อีก
+    // JwtStrategy ได้ validate และเตรียมข้อมูลมาให้แล้ว
+    return {
+      success: true,
+      user: req.user,
+    };
   }
 
   @Post('refresh-token')
