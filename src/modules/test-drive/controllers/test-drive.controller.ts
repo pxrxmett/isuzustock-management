@@ -21,6 +21,8 @@ import { TestDriveService } from '../services/test-drive.service';
 import { CreateTestDriveDto } from '../dto/create-test-drive.dto';
 import { UpdateTestDriveDto } from '../dto/update-test-drive.dto';
 import { SearchTestDriveDto } from '../dto/search-test-drive.dto';
+import { PdpaConsentDto } from '../dto/pdpa-consent.dto';
+import { SubmitSignatureDto } from '../dto/submit-signature.dto';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 
 @ApiTags('Test Drive')
@@ -58,10 +60,42 @@ export class TestDriveController {
   @ApiResponse({ status: 200, description: 'แก้ไขสำเร็จ' })
   @ApiBody({ type: UpdateTestDriveDto })
   update(
-    @Param('id', ParseIntPipe) id: number, 
+    @Param('id', ParseIntPipe) id: number,
     @Body() updateDto: UpdateTestDriveDto
   ) {
     return this.testDriveService.update(id, updateDto);
+  }
+
+  @Post(':id/pdpa-consent')
+  @ApiOperation({ summary: 'ยอมรับเงื่อนไข PDPA' })
+  @ApiResponse({ status: 200, description: 'บันทึกการยอมรับ PDPA สำเร็จ' })
+  @ApiResponse({ status: 400, description: 'ข้อมูลไม่ถูกต้อง' })
+  @ApiResponse({ status: 404, description: 'ไม่พบรายการทดลองขับ' })
+  @ApiBody({ type: PdpaConsentDto })
+  submitPdpaConsent(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() pdpaConsentDto: PdpaConsentDto,
+  ) {
+    console.log('📍 POST /api/test-drives/:id/pdpa-consent');
+    console.log('🔍 Test Drive ID:', id);
+    console.log('✅ Consent:', pdpaConsentDto.consent);
+    return this.testDriveService.submitPdpaConsent(id, pdpaConsentDto.consent);
+  }
+
+  @Post(':id/signature')
+  @ApiOperation({ summary: 'บันทึกลายเซ็น' })
+  @ApiResponse({ status: 200, description: 'บันทึกลายเซ็นสำเร็จ' })
+  @ApiResponse({ status: 400, description: 'ข้อมูลไม่ถูกต้องหรือยังไม่ได้ยอมรับ PDPA' })
+  @ApiResponse({ status: 404, description: 'ไม่พบรายการทดลองขับ' })
+  @ApiBody({ type: SubmitSignatureDto })
+  submitSignature(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() submitSignatureDto: SubmitSignatureDto,
+  ) {
+    console.log('📍 POST /api/test-drives/:id/signature');
+    console.log('🔍 Test Drive ID:', id);
+    console.log('🖊️ Signature data length:', submitSignatureDto.signatureData.length);
+    return this.testDriveService.submitSignature(id, submitSignatureDto.signatureData);
   }
 
   @Delete(':id')
