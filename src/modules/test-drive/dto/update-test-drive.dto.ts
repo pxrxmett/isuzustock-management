@@ -21,6 +21,22 @@ export class UpdateTestDriveDto {
   customer_phone?: string;
 
   @ApiPropertyOptional({
+    example: '12-34567890-12',
+    description: 'เลขที่ใบขับขี่ลูกค้า'
+  })
+  @IsOptional()
+  @IsString()
+  customer_license_number?: string;
+
+  @ApiPropertyOptional({
+    example: 'ลูกค้าต้องการทดสอบตอนเช้า',
+    description: 'หมายเหตุเพิ่มเติม'
+  })
+  @IsOptional()
+  @IsString()
+  notes?: string;
+
+  @ApiPropertyOptional({
     example: '2023-01-15T10:00:00Z',
     description: 'เวลาเริ่มทดลองขับ'
   })

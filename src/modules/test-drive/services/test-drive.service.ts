@@ -138,11 +138,20 @@ export class TestDriveService {
       throw new NotFoundException('ไม่พบรายการทดลองขับ');
     }
 
+    // Calculate can_edit based on signature date
+    let canEdit = true;
+    if (testDrive.signedAt) {
+      const signedDate = new Date(testDrive.signedAt).toDateString();
+      const today = new Date().toDateString();
+      canEdit = signedDate === today;
+    }
+
     return {
       ...testDrive,
-      staff_name: testDrive.staff ? 
-        `${testDrive.staff.firstName} ${testDrive.staff.lastName}` : 
-        null
+      staff_name: testDrive.staff ?
+        `${testDrive.staff.firstName} ${testDrive.staff.lastName}` :
+        null,
+      can_edit: canEdit,
     };
   }
 
@@ -161,9 +170,11 @@ export class TestDriveService {
 
     // แปลงจาก snake_case ใน DTO เป็น camelCase ใน entity
     const entityToUpdate = {};
-    
+
     if (updateDto.customer_name) entityToUpdate['customerName'] = updateDto.customer_name;
     if (updateDto.customer_phone) entityToUpdate['customerPhone'] = updateDto.customer_phone;
+    if (updateDto.customer_license_number) entityToUpdate['customerLicenseNumber'] = updateDto.customer_license_number;
+    if (updateDto.notes !== undefined) entityToUpdate['notes'] = updateDto.notes;
     if (updateDto.test_route) entityToUpdate['testRoute'] = updateDto.test_route;
     if (updateDto.start_time) entityToUpdate['startTime'] = updateDto.start_time;
     if (updateDto.expected_end_time) entityToUpdate['expectedEndTime'] = updateDto.expected_end_time;
@@ -175,6 +186,65 @@ export class TestDriveService {
 
     Object.assign(testDrive, entityToUpdate);
     return this.testDriveRepository.save(testDrive);
+  }
+
+  async submitPdpaConsent(id: number, consent: boolean) {
+    const testDrive = await this.testDriveRepository.findOne({
+      where: { id },
+    });
+
+    if (!testDrive) {
+      throw new NotFoundException('ไม่พบรายการทดลองขับ');
+    }
+
+    if (!consent) {
+      throw new BadRequestException('ต้องยอมรับเงื่อนไข PDPA ก่อนดำเนินการต่อ');
+    }
+
+    testDrive.pdpaConsent = consent;
+    testDrive.pdpaConsentedAt = new Date();
+
+    await this.testDriveRepository.save(testDrive);
+
+    return {
+      success: true,
+      message: 'PDPA consent recorded',
+    };
+  }
+
+  async submitSignature(id: number, signatureData: string) {
+    const testDrive = await this.testDriveRepository.findOne({
+      where: { id },
+    });
+
+    if (!testDrive) {
+      throw new NotFoundException('ไม่พบรายการทดลองขับ');
+    }
+
+    if (!testDrive.pdpaConsent) {
+      throw new BadRequestException('กรุณายอมรับเงื่อนไข PDPA ก่อนเซ็นชื่อ');
+    }
+
+    // Check if already signed today - allow editing only on same day
+    if (testDrive.signedAt) {
+      const signedDate = new Date(testDrive.signedAt).toDateString();
+      const today = new Date().toDateString();
+
+      if (signedDate !== today) {
+        throw new BadRequestException('ไม่สามารถแก้ไขลายเซ็นได้ เนื่องจากเกินกำหนดเวลา (แก้ไขได้เฉพาะวันที่เซ็นเท่านั้น)');
+      }
+    }
+
+    // Save base64 signature data directly to database
+    testDrive.signatureData = signatureData;
+    testDrive.signedAt = testDrive.signedAt || new Date(); // Keep original signed date if updating
+
+    await this.testDriveRepository.save(testDrive);
+
+    return {
+      success: true,
+      message: 'Signature saved successfully',
+    };
   }
 
   async cancel(id: number) {

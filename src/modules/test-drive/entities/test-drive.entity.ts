@@ -34,6 +34,12 @@ export class TestDrive {
   @Column({ name: 'customer_phone' })
   customerPhone: string;
 
+  @Column({ name: 'customer_license_number', nullable: true })
+  customerLicenseNumber: string;
+
+  @Column({ type: 'text', nullable: true })
+  notes: string;
+
   @Column({ name: 'test_route', nullable: true })
   testRoute: string;
 
@@ -58,6 +64,18 @@ export class TestDrive {
   @ManyToOne(() => Staff, (staff) => staff.testDrives)
   @JoinColumn({ name: 'responsible_staff' })
   staff: Staff;
+
+  @Column({ name: 'pdpa_consent', type: 'boolean', default: false })
+  pdpaConsent: boolean;
+
+  @Column({ name: 'pdpa_consented_at', type: 'timestamp', nullable: true })
+  pdpaConsentedAt: Date;
+
+  @Column({ name: 'signature_data', type: 'longtext', nullable: true })
+  signatureData: string;
+
+  @Column({ name: 'signed_at', type: 'timestamp', nullable: true })
+  signedAt: Date;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
