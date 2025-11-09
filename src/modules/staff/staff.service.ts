@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, IsNull } from 'typeorm';
 import { Staff } from './entities/staff.entity';
 import { CreateStaffDto } from './dto/create-staff.dto';
 
@@ -16,8 +16,34 @@ export class StaffService {
     return this.staffRepository.save(staff);
   }
 
-  async findAll(): Promise<Staff[]> {
-    return this.staffRepository.find();
+  async findAll(unlinked?: boolean): Promise<Staff[]> {
+    const whereClause = unlinked ? { lineUserId: IsNull() } : {};
+
+    console.log('🔎 Finding all staff', unlinked ? '(unlinked only)' : '(all)');
+
+    const staffs = await this.staffRepository.find({
+      where: whereClause,
+      select: [
+        'id',
+        'staffCode',
+        'firstName',
+        'lastName',
+        'position',
+        'department',
+        'phone',
+        'email',
+        'role',
+        'status',
+        'lineUserId',
+        'lineDisplayName',
+        'linePictureUrl',
+        'isLineLinked',
+      ],
+      order: { staffCode: 'ASC' },
+    });
+
+    console.log(`✅ Found ${staffs.length} staff members`);
+    return staffs;
   }
 
   async findOne(id: string): Promise<Staff> {

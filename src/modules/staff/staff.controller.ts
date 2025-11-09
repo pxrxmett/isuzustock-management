@@ -4,11 +4,12 @@ import {
   Post,
   Body,
   Param,
+  Query,
   Delete,
   Put,
   UseGuards,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { StaffService } from './staff.service';
 import { CreateStaffDto } from './dto/create-staff.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -28,10 +29,22 @@ export class StaffController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'ดูรายการพนักงานทั้งหมด' })
+  @ApiOperation({ summary: 'ดูรายการพนักงานทั้งหมด (หรือเฉพาะที่ยังไม่ได้เชื่อมโยง LINE)' })
+  @ApiQuery({
+    name: 'unlinked',
+    required: false,
+    type: Boolean,
+    description: 'กรองเฉพาะพนักงานที่ยังไม่ได้เชื่อมโยง LINE (ใช้สำหรับแอดมิน)',
+  })
   @ApiResponse({ status: 200, description: 'แสดงรายการพนักงานทั้งหมด' })
-  findAll() {
-    return this.staffService.findAll();
+  findAll(@Query('unlinked') unlinked?: string) {
+    console.log('📍 GET /api/staffs');
+    console.log('🔍 Unlinked filter:', unlinked);
+
+    // Convert string 'true'/'false' to boolean
+    const unlinkedBool = unlinked === 'true';
+
+    return this.staffService.findAll(unlinkedBool);
   }
 
   @Get(':identifier')

@@ -41,6 +41,27 @@ export class LineAuthService {
       // เพิ่ม: บันทึกหรืออัปเดตข้อมูลใน line_profiles
       await this.saveOrUpdateLineProfile(lineProfile);
 
+      // เพิ่ม: บันทึกหรืออัปเดตข้อมูลใน line_users (ไม่ว่าจะเชื่อมโยงหรือไม่)
+      // ตรวจสอบว่ามี line_users record หรือไม่
+      let lineUser = await this.lineUserRepository.findOne({
+        where: { lineUserId: lineProfile.userId }
+      });
+
+      if (!lineUser) {
+        // สร้าง LINE User ใหม่ (ยังไม่ได้เชื่อมโยงกับพนักงาน)
+        lineUser = new LineUser();
+        lineUser.lineUserId = lineProfile.userId;
+        lineUser.displayName = lineProfile.displayName;
+        lineUser.pictureUrl = lineProfile.pictureUrl;
+        lineUser.accessToken = accessToken;
+        // กำหนดวันหมดอายุ token (ตัวอย่าง: 30 วัน)
+        const expiryDate = new Date();
+        expiryDate.setDate(expiryDate.getDate() + 30);
+        lineUser.tokenExpiresAt = expiryDate;
+        await this.lineUserRepository.save(lineUser);
+        this.logger.log(`สร้าง LINE User ใหม่: ${lineProfile.userId}`);
+      }
+
       // ค้นหาพนักงานที่เชื่อมโยงกับ LINE User ID
       const staff = await this.staffRepository.findOne({
         where: { lineUserId: lineProfile.userId },
@@ -48,13 +69,21 @@ export class LineAuthService {
 
       // ตรวจสอบว่ามีการเชื่อมโยงกับพนักงานหรือไม่
       if (!staff) {
-        throw new HttpException(
-          'ไม่พบการเชื่อมโยงบัญชี LINE กับพนักงาน',
-          HttpStatus.UNAUTHORIZED,
-        );
+        // ไม่พบการเชื่อมโยง - ส่ง response พิเศษกลับไป (ไม่ throw error)
+        this.logger.warn(`LINE User ${lineProfile.userId} ยังไม่ได้เชื่อมโยงกับพนักงาน`);
+
+        return {
+          error: 'STAFF_NOT_LINKED',
+          message: 'ยังไม่ได้เชื่อมโยงบัญชี LINE กับพนักงาน',
+          lineUser: {
+            userId: lineProfile.userId,
+            displayName: lineProfile.displayName,
+            pictureUrl: lineProfile.pictureUrl,
+          },
+        } as any;
       }
 
-      // เพิ่ม: บันทึกหรืออัปเดตข้อมูลใน line_users
+      // เพิ่ม: อัปเดตข้อมูลใน line_users เมื่อเชื่อมโยงแล้ว
       await this.saveOrUpdateLineUser(lineProfile.userId, staff.id, accessToken);
 
       // ตรวจสอบสถานะพนักงาน
