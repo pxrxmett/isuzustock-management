@@ -5,10 +5,12 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { LineIntegrationController } from './line-integration.controller';
 import { LineIntegrationService } from './line-integration.service';
 import { Staff } from '../staff/entities/staff.entity';
+import { LineUser } from './entities/line-user.entity';
+import { LineProfile } from '../auth/entities/line-profile.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Staff]),
+    TypeOrmModule.forFeature([Staff, LineUser, LineProfile]),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
