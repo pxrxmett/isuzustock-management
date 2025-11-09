@@ -5,6 +5,7 @@ import { Repository } from 'typeorm';
 import { Staff } from '../staff/entities/staff.entity';
 import { CheckLineRegistrationDto } from './dto/check-line-registration.dto';
 import { LinkStaffLineDto } from './dto/link-staff-line.dto';
+import { SimpleLinkDto } from './dto/simple-link.dto';
 import axios from 'axios';
 
 @Injectable()
@@ -211,6 +212,141 @@ export class LineIntegrationService {
         throw error;
       }
       
+      throw new HttpException(
+        'เกิดข้อผิดพลาดในการเชื่อมโยง LINE กับพนักงาน',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  /**
+   * เชื่อมโยง LINE กับพนักงานแบบง่าย (สำหรับ LIFF App)
+   * @param linkDto ข้อมูลการเชื่อมโยง
+   * @returns ข้อมูลการเชื่อมโยงที่สำเร็จพร้อม JWT token
+   */
+  async linkStaffSimple(linkDto: SimpleLinkDto) {
+    try {
+      const { staffCode, lineUserId, lineDisplayName, linePictureUrl } = linkDto;
+
+      console.log('📍 Simple Link Request:', {
+        staffCode,
+        lineUserId,
+        hasDisplayName: !!lineDisplayName,
+        hasPictureUrl: !!linePictureUrl,
+      });
+
+      // 1. ตรวจสอบว่า line user id นี้เชื่อมโยงกับพนักงานอื่นไปแล้วหรือไม่
+      const existingLinkedStaff = await this.staffRepository.findOne({
+        where: { lineUserId },
+        select: ['id', 'staffCode', 'lineUserId', 'firstName', 'lastName'],
+      });
+
+      if (existingLinkedStaff) {
+        console.log('❌ LINE already linked to:', existingLinkedStaff.staffCode);
+        throw new HttpException(
+          `LINE นี้ได้เชื่อมโยงกับพนักงาน ${existingLinkedStaff.staffCode} (${existingLinkedStaff.firstName} ${existingLinkedStaff.lastName}) แล้ว`,
+          HttpStatus.CONFLICT,
+        );
+      }
+
+      // 2. ตรวจสอบว่ามีพนักงานที่มีรหัสตามที่ระบุหรือไม่
+      const staff = await this.staffRepository.findOne({
+        where: { staffCode: staffCode },
+        select: [
+          'id',
+          'staffCode',
+          'firstName',
+          'lastName',
+          'position',
+          'department',
+          'phone',
+          'email',
+          'role',
+          'status',
+          'lineUserId',
+          'lineDisplayName',
+          'linePictureUrl',
+          'lineLastLoginAt',
+          'isLineLinked',
+        ],
+      });
+
+      if (!staff) {
+        console.log('❌ Staff not found:', staffCode);
+        throw new HttpException(
+          `ไม่พบข้อมูลพนักงานรหัส ${staffCode}`,
+          HttpStatus.NOT_FOUND,
+        );
+      }
+
+      if (staff.status !== 'active') {
+        console.log('❌ Staff inactive:', staffCode);
+        throw new HttpException(
+          'พนักงานไม่อยู่ในสถานะที่สามารถเชื่อมโยงได้',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      // 3. ตรวจสอบว่าพนักงานคนนี้เชื่อมโยง LINE อื่นอยู่หรือไม่
+      if (staff.lineUserId && staff.lineUserId !== lineUserId) {
+        console.log('❌ Staff already linked to another LINE:', staff.lineUserId);
+        throw new HttpException(
+          'พนักงานคนนี้ได้เชื่อมโยง LINE อื่นไว้แล้ว กรุณาติดต่อแอดมิน',
+          HttpStatus.CONFLICT,
+        );
+      }
+
+      // 4. บันทึกข้อมูลการเชื่อมโยง
+      staff.lineUserId = lineUserId;
+      if (lineDisplayName) staff.lineDisplayName = lineDisplayName;
+      if (linePictureUrl) staff.linePictureUrl = linePictureUrl;
+      staff.lineLastLoginAt = new Date();
+      staff.isLineLinked = true;
+
+      await this.staffRepository.save(staff);
+
+      console.log('✅ Simple link successful:', staffCode, '<->', lineUserId);
+
+      // 5. สร้าง JWT token
+      const payload = {
+        sub: staff.id,
+        id: staff.id,
+        staffCode: staff.staffCode,
+        lineUserId: staff.lineUserId,
+        role: staff.role || 'staff',
+        department: staff.department,
+      };
+
+      const token = this.jwtService.sign(payload);
+
+      this.logger.log(
+        `✅ LINE linked successfully: Staff ${staffCode} <-> LINE User ${lineUserId}`,
+      );
+
+      return {
+        success: true,
+        message: 'เชื่อมโยง LINE กับพนักงานสำเร็จ',
+        access_token: token,
+        staff: {
+          id: staff.id,
+          staffCode: staff.staffCode,
+          fullName: `${staff.firstName} ${staff.lastName}`,
+          firstName: staff.firstName,
+          lastName: staff.lastName,
+          department: staff.department,
+          position: staff.position,
+          role: staff.role || 'staff',
+          lineUserId: staff.lineUserId,
+          lineDisplayName: staff.lineDisplayName,
+        },
+      };
+    } catch (error) {
+      this.logger.error(`❌ Simple link failed: ${error.message}`);
+
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new HttpException(
         'เกิดข้อผิดพลาดในการเชื่อมโยง LINE กับพนักงาน',
         HttpStatus.INTERNAL_SERVER_ERROR,
