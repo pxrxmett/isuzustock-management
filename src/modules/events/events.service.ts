@@ -3,6 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -33,7 +34,7 @@ export class EventsService {
   ) {}
 
   // สร้าง Event ใหม่
-  async create(createEventDto: CreateEventDto): Promise<Event> {
+  async create(createEventDto: CreateEventDto, brandId?: number): Promise<Event> {
     // ตรวจสอบวันที่
     const startDate = new Date(createEventDto.startDate);
     const endDate = new Date(createEventDto.endDate);
@@ -42,10 +43,16 @@ export class EventsService {
       throw new BadRequestException('วันที่สิ้นสุดต้องมากกว่าหรือเท่ากับวันที่เริ่มต้น');
     }
 
-    // Set default brandId to 1 (ISUZU) if not provided
+    // Determine brandId (from URL parameter or from body)
+    const finalBrandId = brandId ?? createEventDto.brandId ?? 1;
+
+    // Validate brand exists
+    await this.brandService.findOne(finalBrandId);
+
+    // Create event (force brandId from URL if provided)
     const eventData = {
       ...createEventDto,
-      brandId: createEventDto.brandId || 1,
+      brandId: finalBrandId,
     };
 
     const event = this.eventRepository.create(eventData);
@@ -56,10 +63,10 @@ export class EventsService {
   }
 
   // ค้นหา Events พร้อม filters และ pagination
-  async findAll(searchDto: SearchEventDto) {
+  async findAll(searchDto: SearchEventDto, brandId?: number) {
     const {
       brand,
-      brandId,
+      brandId: searchBrandId,
       status,
       type,
       startDate,
@@ -76,20 +83,23 @@ export class EventsService {
       .leftJoinAndSelect('eventVehicles.vehicle', 'vehicle')
       .leftJoinAndSelect('event.brand', 'brand');
 
-    // Brand filtering
-    if (brand || brandId) {
-      const brandParam = brand || brandId;
+    // Brand filtering (if brandId is provided from URL, use it)
+    if (brandId !== undefined) {
+      query.andWhere('event.brandId = :brandId', { brandId });
+    } else if (brand || searchBrandId) {
+      // Admin mode: allow filtering by brand from search DTO
+      const brandParam = brand || searchBrandId;
 
       if (brandParam) {
         // Check if it's a number (brand ID) or string (brand code)
         if (!isNaN(Number(brandParam))) {
-          query.andWhere('event.brandId = :brandId', {
-            brandId: Number(brandParam)
+          query.andWhere('event.brandId = :searchBrandId', {
+            searchBrandId: Number(brandParam)
           });
         } else {
           // Brand code (e.g., 'ISUZU', 'BYD')
           const resolvedBrandId = await this.brandService.getIdByCode(brandParam.toString());
-          query.andWhere('event.brandId = :brandId', { brandId: resolvedBrandId });
+          query.andWhere('event.brandId = :searchBrandId', { searchBrandId: resolvedBrandId });
         }
       }
     }
@@ -141,7 +151,7 @@ export class EventsService {
   }
 
   // ดึงข้อมูล Event ตาม ID
-  async findOne(id: string): Promise<Event> {
+  async findOne(id: string, brandId?: number): Promise<Event> {
     const event = await this.eventRepository.findOne({
       where: { id },
       relations: ['eventVehicles', 'eventVehicles.vehicle', 'brand'],
@@ -151,12 +161,19 @@ export class EventsService {
       throw new NotFoundException(`ไม่พบงาน ID: ${id}`);
     }
 
+    // Validate brand ownership if brandId is provided
+    if (brandId !== undefined && event.brandId !== brandId) {
+      throw new ForbiddenException(
+        `Event #${id} does not belong to this brand`
+      );
+    }
+
     return event;
   }
 
   // อัปเดต Event
-  async update(id: string, updateEventDto: UpdateEventDto): Promise<Event> {
-    const event = await this.findOne(id);
+  async update(id: string, updateEventDto: UpdateEventDto, brandId?: number): Promise<Event> {
+    const event = await this.findOne(id, brandId);
 
     // ตรวจสอบวันที่ถ้ามีการเปลี่ยน
     if (updateEventDto.startDate || updateEventDto.endDate) {
@@ -176,8 +193,8 @@ export class EventsService {
   }
 
   // ลบ Event (soft delete)
-  async remove(id: string): Promise<void> {
-    const event = await this.findOne(id);
+  async remove(id: string, brandId?: number): Promise<void> {
+    const event = await this.findOne(id, brandId);
 
     // ตรวจสอบว่า event กำลังดำเนินการอยู่หรือไม่
     if (event.status === EventStatus.IN_PROGRESS) {
@@ -193,14 +210,22 @@ export class EventsService {
   }
 
   // Assign รถเข้า Event
-  async assignVehicle(eventId: string, assignDto: AssignVehicleDto): Promise<EventVehicle> {
-    const event = await this.findOne(eventId);
+  async assignVehicle(eventId: string, assignDto: AssignVehicleDto, brandId?: number): Promise<EventVehicle> {
+    const event = await this.findOne(eventId, brandId);
     const vehicle = await this.vehicleRepository.findOne({
       where: { id: assignDto.vehicleId },
+      relations: ['brand'],
     });
 
     if (!vehicle) {
       throw new NotFoundException(`ไม่พบรถ ID: ${assignDto.vehicleId}`);
+    }
+
+    // Validate vehicle belongs to the same brand as the event
+    if (vehicle.brandId !== event.brandId) {
+      throw new ForbiddenException(
+        `Vehicle #${assignDto.vehicleId} does not belong to the same brand as the event`
+      );
     }
 
     // ตรวจสอบว่ารถถูก lock สำหรับ event อื่นอยู่หรือไม่
@@ -247,6 +272,7 @@ export class EventsService {
   async assignMultipleVehicles(
     eventId: string,
     assignDto: AssignMultipleVehiclesDto,
+    brandId?: number,
   ): Promise<{
     success: number;
     failed: number;
@@ -262,7 +288,7 @@ export class EventsService {
     hasPartialSuccess: boolean;
     recommendation?: string;
   }> {
-    const event = await this.findOne(eventId);
+    const event = await this.findOne(eventId, brandId);
     const results: Array<{
       vehicleId: number;
       vehicleCode?: string;
@@ -300,7 +326,7 @@ export class EventsService {
           vehicleId,
           assignedBy: assignDto.assignedBy,
           notes: assignDto.notes,
-        });
+        }, brandId);
 
         results.push({
           vehicleId,
@@ -363,7 +389,10 @@ export class EventsService {
   }
 
   // ลบรถออกจาก Event
-  async unassignVehicle(eventId: string, vehicleId: number): Promise<void> {
+  async unassignVehicle(eventId: string, vehicleId: number, brandId?: number): Promise<void> {
+    // Validate event ownership
+    await this.findOne(eventId, brandId);
+
     const eventVehicle = await this.eventVehicleRepository.findOne({
       where: { eventId, vehicleId },
     });
@@ -395,8 +424,8 @@ export class EventsService {
   }
 
   // ดึงรถทั้งหมดใน Event
-  async getEventVehicles(eventId: string) {
-    await this.findOne(eventId); // ตรวจสอบว่า event มีอยู่
+  async getEventVehicles(eventId: string, brandId?: number) {
+    await this.findOne(eventId, brandId); // ตรวจสอบว่า event มีอยู่และตรวจสอบ brand ownership
 
     const eventVehicles = await this.eventVehicleRepository.find({
       where: { eventId },
@@ -412,8 +441,8 @@ export class EventsService {
   }
 
   // เปลี่ยนสถานะ Event
-  async updateStatus(id: string, updateStatusDto: UpdateEventStatusDto): Promise<Event> {
-    const event = await this.findOne(id);
+  async updateStatus(id: string, updateStatusDto: UpdateEventStatusDto, brandId?: number): Promise<Event> {
+    const event = await this.findOne(id, brandId);
     event.status = updateStatusDto.status;
 
     // ถ้าเป็นสถานะ completed หรือ cancelled ให้ปลดล็อครถ
@@ -430,11 +459,18 @@ export class EventsService {
   }
 
   // ดึงข้อมูลสำหรับ Calendar view
-  async getCalendarEvents(startDate: string, endDate: string) {
+  async getCalendarEvents(startDate: string, endDate: string, brandId?: number) {
+    const where: any = {
+      startDate: Between(new Date(startDate), new Date(endDate)),
+    };
+
+    // Filter by brand if brandId is provided
+    if (brandId !== undefined) {
+      where.brandId = brandId;
+    }
+
     const events = await this.eventRepository.find({
-      where: {
-        startDate: Between(new Date(startDate), new Date(endDate)),
-      },
+      where,
       relations: ['eventVehicles'],
       order: {
         startDate: 'ASC',
