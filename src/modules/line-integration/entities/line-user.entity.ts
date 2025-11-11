@@ -23,8 +23,8 @@ export class LineUser {
   @Column({ name: 'picture_url', nullable: true })
   pictureUrl: string;
 
-  @Column({ name: 'staff_id', nullable: true })
-  staffId: string;
+  @Column({ name: 'staff_id', type: 'int', nullable: true })
+  staffId: number | null;
 
   // เพิ่มคุณสมบัติใหม่
   @Column({ name: 'access_token', nullable: true, type: 'text' })
@@ -34,7 +34,7 @@ export class LineUser {
   @Column({ name: 'token_expires_at', nullable: true })
   tokenExpiresAt: Date;
 
-  @ManyToOne(() => Staff)
+  @ManyToOne(() => Staff, { eager: false })
   @JoinColumn({ name: 'staff_id' })
   staff: Staff;
 
