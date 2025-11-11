@@ -5,6 +5,7 @@ import { TestDrive } from '../entities/test-drive.entity';
 import { TestDriveStatus } from '../entities/test-drive-status.enum'; // แก้ไขการนำเข้า TestDriveStatus
 import { Vehicle, VehicleStatus } from '../../stock/entities/vehicle.entity';
 import { Staff } from '../../staff/entities/staff.entity';
+import { BrandService } from '../../brand/brand.service';
 import { CreateTestDriveDto } from '../dto/create-test-drive.dto';
 import { UpdateTestDriveDto } from '../dto/update-test-drive.dto';
 import { SearchTestDriveDto } from '../dto/search-test-drive.dto';
@@ -21,6 +22,7 @@ export class TestDriveService {
     private vehicleRepository: Repository<Vehicle>,
     @InjectRepository(Staff)
     private staffRepository: Repository<Staff>,
+    private brandService: BrandService,
   ) {}
 
   async create(createDto: CreateTestDriveDto) {
@@ -49,6 +51,7 @@ export class TestDriveService {
     // สร้างการจองใหม่
     const testDriveData = {
       vehicleId: createDto.vehicle_id,
+      brandId: createDto.brand_id || 1, // Default to ISUZU
       customerName: createDto.customer_name,
       customerPhone: createDto.customer_phone,
       startTime: createDto.start_time,
@@ -73,11 +76,30 @@ export class TestDriveService {
   async findAll(searchDto: SearchTestDriveDto) {
     const query = this.testDriveRepository.createQueryBuilder('td')
       .leftJoinAndSelect('td.vehicle', 'vehicle')
-      .leftJoinAndSelect('td.staff', 'staff');
+      .leftJoinAndSelect('td.staff', 'staff')
+      .leftJoinAndSelect('td.brand', 'brand');
+
+    // Brand filtering
+    if (searchDto.brand || searchDto.brandId) {
+      const brandParam = searchDto.brand || searchDto.brandId;
+
+      if (brandParam) {
+        // Check if it's a number (brand ID) or string (brand code)
+        if (!isNaN(Number(brandParam))) {
+          query.andWhere('td.brandId = :brandId', {
+            brandId: Number(brandParam)
+          });
+        } else {
+          // Brand code (e.g., 'ISUZU', 'BYD')
+          const brandId = await this.brandService.getIdByCode(brandParam.toString());
+          query.andWhere('td.brandId = :brandId', { brandId });
+        }
+      }
+    }
 
     if (searchDto.customer_name) { // ใช้ snake_case ตาม DTO
       query.andWhere('td.customerName ILIKE :name', { // ใช้ camelCase ตาม entity
-        name: `%${searchDto.customer_name}%` 
+        name: `%${searchDto.customer_name}%`
       });
     }
 
@@ -124,7 +146,7 @@ export class TestDriveService {
   async findOne(id: number) {
     const testDrive = await this.testDriveRepository.findOne({
       where: { id },
-      relations: ['vehicle', 'staff'],
+      relations: ['vehicle', 'staff', 'brand'],
       select: {
         staff: {
           id: true,

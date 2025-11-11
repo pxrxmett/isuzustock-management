@@ -5,11 +5,14 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   OneToMany,
+  ManyToOne,
+  JoinColumn,
   Index,
 } from 'typeorm';
 import { EventVehicle } from './event-vehicle.entity';
 import { EventStatus } from './event-status.enum';
 import { EventType } from './event-type.enum';
+import { Brand } from '../../brand/entities/brand.entity';
 
 @Entity('events')
 @Index(['status'])
@@ -19,6 +22,14 @@ import { EventType } from './event-type.enum';
 export class Event {
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  // ⭐ เพิ่ม brand relationship
+  @Column({ name: 'brand_id', default: 1 })
+  brandId: number;
+
+  @ManyToOne(() => Brand)
+  @JoinColumn({ name: 'brand_id' })
+  brand: Brand;
 
   @Column({ length: 255 })
   title: string;

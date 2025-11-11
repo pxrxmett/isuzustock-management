@@ -43,8 +43,10 @@ export class StockController {
   @Get()
   @ApiOperation({ summary: 'Get all vehicles' })
   @ApiResponse({ status: 200, description: 'Return all vehicles.' })
-  async findAll() {
-    return await this.stockService.findAll();
+  async findAll(@Query('brand') brand?: string) {
+    // Support both brand ID (1, 2) and brand code (ISUZU, BYD)
+    const brandId = brand ? (!isNaN(Number(brand)) ? Number(brand) : undefined) : undefined;
+    return await this.stockService.findAll(brandId);
   }
 
   @Get('vehicles')
@@ -52,6 +54,8 @@ export class StockController {
   @ApiResponse({ status: 200, description: 'Return filtered vehicles.' })
   async getVehicles(
     @Query() query: {
+      brand?: string;
+      brandId?: number;
       carCard?: string;
       dlrId?: string;
       mdlCd?: string;

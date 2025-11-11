@@ -10,6 +10,7 @@ import { Repository, Between, Like, In } from 'typeorm';
 import { Event } from './entities/event.entity';
 import { EventVehicle } from './entities/event-vehicle.entity';
 import { Vehicle, VehicleStatus } from '../stock/entities/vehicle.entity';
+import { BrandService } from '../brand/brand.service';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { SearchEventDto } from './dto/search-event.dto';
@@ -28,6 +29,7 @@ export class EventsService {
     private eventVehicleRepository: Repository<EventVehicle>,
     @InjectRepository(Vehicle)
     private vehicleRepository: Repository<Vehicle>,
+    private brandService: BrandService,
   ) {}
 
   // สร้าง Event ใหม่
@@ -40,7 +42,13 @@ export class EventsService {
       throw new BadRequestException('วันที่สิ้นสุดต้องมากกว่าหรือเท่ากับวันที่เริ่มต้น');
     }
 
-    const event = this.eventRepository.create(createEventDto);
+    // Set default brandId to 1 (ISUZU) if not provided
+    const eventData = {
+      ...createEventDto,
+      brandId: createEventDto.brandId || 1,
+    };
+
+    const event = this.eventRepository.create(eventData);
     const savedEvent = await this.eventRepository.save(event);
 
     this.logger.log(`Event created: ${savedEvent.id} - ${savedEvent.title}`);
@@ -50,6 +58,8 @@ export class EventsService {
   // ค้นหา Events พร้อม filters และ pagination
   async findAll(searchDto: SearchEventDto) {
     const {
+      brand,
+      brandId,
       status,
       type,
       startDate,
@@ -63,7 +73,26 @@ export class EventsService {
     const query = this.eventRepository
       .createQueryBuilder('event')
       .leftJoinAndSelect('event.eventVehicles', 'eventVehicles')
-      .leftJoinAndSelect('eventVehicles.vehicle', 'vehicle');
+      .leftJoinAndSelect('eventVehicles.vehicle', 'vehicle')
+      .leftJoinAndSelect('event.brand', 'brand');
+
+    // Brand filtering
+    if (brand || brandId) {
+      const brandParam = brand || brandId;
+
+      if (brandParam) {
+        // Check if it's a number (brand ID) or string (brand code)
+        if (!isNaN(Number(brandParam))) {
+          query.andWhere('event.brandId = :brandId', {
+            brandId: Number(brandParam)
+          });
+        } else {
+          // Brand code (e.g., 'ISUZU', 'BYD')
+          const resolvedBrandId = await this.brandService.getIdByCode(brandParam.toString());
+          query.andWhere('event.brandId = :brandId', { brandId: resolvedBrandId });
+        }
+      }
+    }
 
     // Filters
     if (status) {
@@ -115,7 +144,7 @@ export class EventsService {
   async findOne(id: string): Promise<Event> {
     const event = await this.eventRepository.findOne({
       where: { id },
-      relations: ['eventVehicles', 'eventVehicles.vehicle'],
+      relations: ['eventVehicles', 'eventVehicles.vehicle', 'brand'],
     });
 
     if (!event) {

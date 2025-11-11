@@ -96,4 +96,14 @@ export class CreateVehicleDto {
   @IsNotEmpty()
   @IsNumber()
   price: number;
+
+  @ApiProperty({
+    description: 'Brand ID (1=ISUZU, 2=BYD)',
+    example: 1,
+    default: 1,
+    required: false,
+  })
+  @IsOptional()
+  @IsNumber()
+  brandId?: number;
 }

@@ -4,9 +4,13 @@ import { StockController } from './controllers/stock.controller';
 import { StockService } from './services/stock.service';
 import { Vehicle } from './entities/vehicle.entity';
 import { FileUpload } from './entities/file-upload.entity';
+import { BrandModule } from '../brand/brand.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Vehicle, FileUpload])],
+  imports: [
+    TypeOrmModule.forFeature([Vehicle, FileUpload]),
+    BrandModule,
+  ],
   controllers: [StockController],
   providers: [StockService],
 })

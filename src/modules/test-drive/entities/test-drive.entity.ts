@@ -9,10 +9,20 @@ import {
 } from 'typeorm';
 import { Staff } from '../../staff/entities/staff.entity';
 import { Vehicle } from '../../stock/entities/vehicle.entity';
+import { Brand } from '../../brand/entities/brand.entity';
+
 @Entity('test_drives')
 export class TestDrive {
   @PrimaryGeneratedColumn()
   id: number;
+
+  // ⭐ เพิ่ม brand relationship
+  @Column({ name: 'brand_id', default: 1 })
+  brandId: number;
+
+  @ManyToOne(() => Brand)
+  @JoinColumn({ name: 'brand_id' })
+  brand: Brand;
 
   @Column({ name: 'vehicle_id' })
   vehicleId: number;
