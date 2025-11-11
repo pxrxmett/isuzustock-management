@@ -65,7 +65,7 @@ export class LineIntegrationController {
   @ApiOperation({ summary: 'ดูข้อมูลพนักงาน' })
   @ApiResponse({ status: 200, description: 'ข้อมูลพนักงาน' })
   async getStaffById(@Param('id') id: string) {
-    return await this.lineIntegrationService.getStaffById(id);
+    return await this.lineIntegrationService.getStaffById(parseInt(id));
   }
 
   // ==================== ADMIN ENDPOINTS ====================

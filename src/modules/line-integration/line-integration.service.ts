@@ -1,25 +1,3 @@
-// @ts-nocheck
-/**
- * TODO: THIS FILE NEEDS REFACTORING FOR NEW STAFF ENTITY
- *
- * The new Staff entity structure changed:
- * - staffCode → employeeCode
- * - firstName/lastName → fullName/fullNameEn
- * - Removed: lineUserId, department, position, lineDisplayName, linePictureUrl, lineLastLoginAt, isLineLinked
- * - Added: brandId (FK to brands table)
- *
- * LINE linking now uses line_users table:
- * - line_users.lineUserId: LINE's user ID
- * - line_users.staffId: FK to staff.id (number type)
- *
- * This file (829 lines) requires extensive refactoring to:
- * 1. Query LineUser table first for linking info
- * 2. Update all field references to new Staff entity structure
- * 3. Update JWT payload generation
- * 4. Update all responses to use new field names
- *
- * Type checking temporarily disabled with @ts-nocheck until refactoring is complete.
- */
 import { Injectable, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { JwtService } from '@nestjs/jwt';
@@ -57,51 +35,37 @@ export class LineIntegrationService {
     try {
       const { lineUserId } = checkLineDto;
 
-      // ตรวจสอบว่า lineUserId มีการเชื่อมโยงกับพนักงานหรือไม่
-      // ✅ ระบุ columns ที่ต้องการเพื่อหลีกเลี่ยง SELECT * ที่จะหา username
-      const existingStaff = await this.staffRepository.findOne({
+      // ตรวจสอบว่า lineUserId มีการเชื่อมโยงกับพนักงานหรือไม่ (ใช้ LineUser table)
+      const lineUser = await this.lineUserRepository.findOne({
         where: { lineUserId },
-        select: [
-          'id',
-          'staffCode',
-          'firstName',
-          'lastName',
-          'position',
-          'department',
-          'phone',
-          'email',
-          'role',
-          'status',
-          'lineUserId',
-          'lineDisplayName',
-          'linePictureUrl',
-          'lineLastLoginAt',
-          'isLineLinked',
-        ],
+        relations: ['staff', 'staff.brand'],
       });
 
       // ถ้าไม่พบการลงทะเบียน
-      if (!existingStaff) {
+      if (!lineUser || !lineUser.staffId) {
         return {
           registered: false,
           staffInfo: null,
         };
       }
 
+      const staff = lineUser.staff;
+
       // พบการลงทะเบียน - Generate JWT token
       const payload = {
-        sub: existingStaff.id,
-        id: existingStaff.id,
-        staffCode: existingStaff.staffCode,
-        lineUserId: existingStaff.lineUserId,
-        role: existingStaff.role || 'staff',
-        department: existingStaff.department,
+        sub: staff.id,
+        id: staff.id,
+        employeeCode: staff.employeeCode,
+        lineUserId: lineUser.lineUserId,
+        role: staff.role || 'staff',
+        brandId: staff.brandId,
+        brandCode: staff.brand?.code,
       };
 
       const token = this.jwtService.sign(payload);
 
       // Log token creation for debugging
-      console.log('🔑 Token created for staff:', existingStaff.staffCode);
+      console.log('🔑 Token created for staff:', staff.employeeCode);
       console.log('📦 Token payload:', JSON.stringify(payload, null, 2));
 
       // Verify token can be decoded (for debugging)
@@ -112,27 +76,25 @@ export class LineIntegrationService {
         console.error('❌ Token decode failed:', err.message);
       }
 
-      // อัปเดต lastLoginAt
-      await this.staffRepository.update(existingStaff.id, {
-        lineLastLoginAt: new Date(),
+      await this.lineUserRepository.update(lineUser.id, {
+        
       });
 
-      this.logger.log(`✅ LINE login successful for staff: ${existingStaff.staffCode} (${existingStaff.lineUserId})`);
+      this.logger.log(`✅ LINE login successful for staff: ${staff.employeeCode} (${lineUser.lineUserId})`);
 
       return {
         registered: true,
-        access_token: token, // ⭐ เปลี่ยนจาก "token" เป็น "access_token" เพื่อความสอดคล้อง
+        access_token: token,
         user: {
-          id: existingStaff.id,
-          staffCode: existingStaff.staffCode,
-          fullName: `${existingStaff.firstName} ${existingStaff.lastName}`,
-          firstName: existingStaff.firstName,
-          lastName: existingStaff.lastName,
-          department: existingStaff.department,
-          position: existingStaff.position,
-          role: existingStaff.role || 'staff',
-          lineUserId: existingStaff.lineUserId,
-          lineDisplayName: existingStaff.lineDisplayName,
+          id: staff.id,
+          employeeCode: staff.employeeCode,
+          fullName: staff.fullName,
+          fullNameEn: staff.fullNameEn,
+          brandId: staff.brandId,
+          brandCode: staff.brand?.code,
+          role: staff.role || 'staff',
+          lineUserId: lineUser.lineUserId,
+          lineDisplayName: lineUser.displayName,
         },
       };
     } catch (error) {
@@ -151,16 +113,15 @@ export class LineIntegrationService {
    */
   async linkLineToStaff(linkDto: LinkStaffLineDto) {
     try {
-      const { staffCode, lineUserId, lineAccessToken } = linkDto;
+      const { staffCode: employeeCode, lineUserId, lineAccessToken } = linkDto;
 
-      // 1. ตรวจสอบว่า line user id นี้เชื่อมโยงกับพนักงานอื่นไปแล้วหรือไม่
-      // ✅ ระบุ columns ที่ต้องการ
-      const existingLinkedStaff = await this.staffRepository.findOne({
+      // 1. ตรวจสอบว่า line user id นี้เชื่อมโยงกับพนักงานอื่นไปแล้วหรือไม่ (ใช้ LineUser table)
+      const existingLineUser = await this.lineUserRepository.findOne({
         where: { lineUserId },
-        select: ['id', 'staffCode', 'lineUserId'],
+        relations: ['staff'],
       });
 
-      if (existingLinkedStaff) {
+      if (existingLineUser && existingLineUser.staffId) {
         throw new HttpException(
           'LINE นี้ได้เชื่อมโยงกับพนักงานอื่นแล้ว',
           HttpStatus.CONFLICT,
@@ -168,26 +129,9 @@ export class LineIntegrationService {
       }
 
       // 2. ตรวจสอบว่ามีพนักงานที่มีรหัสตามที่ระบุหรือไม่
-      // ✅ ระบุ columns ที่ต้องการ
       const staff = await this.staffRepository.findOne({
-        where: { staffCode: staffCode },
-        select: [
-          'id',
-          'staffCode',
-          'firstName',
-          'lastName',
-          'position',
-          'department',
-          'phone',
-          'email',
-          'role',
-          'status',
-          'lineUserId',
-          'lineDisplayName',
-          'linePictureUrl',
-          'lineLastLoginAt',
-          'isLineLinked',
-        ],
+        where: { employeeCode },
+        relations: ['brand'],
       });
 
       if (!staff) {
@@ -212,23 +156,37 @@ export class LineIntegrationService {
         );
       }
 
-      // 5. บันทึกข้อมูลการเชื่อมโยง
-      staff.lineUserId = lineProfile.userId;
-      staff.lineDisplayName = lineProfile.displayName;
-      staff.linePictureUrl = lineProfile.pictureUrl;
-      staff.lineLastLoginAt = new Date();
+      // 5. บันทึกข้อมูลการเชื่อมโยงใน LineUser table
+      if (existingLineUser) {
+        // Update existing LineUser record
+        existingLineUser.staffId = staff.id;
+        existingLineUser.displayName = lineProfile.displayName;
+        existingLineUser.pictureUrl = lineProfile.pictureUrl;
+        await this.lineUserRepository.save(existingLineUser);
+      } else {
+        // Create new LineUser record
+        const newLineUser = this.lineUserRepository.create({
+          lineUserId: lineProfile.userId,
+          staffId: staff.id,
+          displayName: lineProfile.displayName,
+          pictureUrl: lineProfile.pictureUrl,
+          
+        });
+        await this.lineUserRepository.save(newLineUser);
+      }
 
-      await this.staffRepository.save(staff);
-
-      this.logger.log(`เชื่อมโยง LINE สำเร็จ: Staff ${staffCode} กับ LINE User ${lineUserId}`);
+      this.logger.log(`เชื่อมโยง LINE สำเร็จ: Staff ${employeeCode} กับ LINE User ${lineUserId}`);
 
       return {
         success: true,
         message: 'เชื่อมโยง LINE กับพนักงานสำเร็จ',
         staffInfo: {
           id: staff.id,
-          staffCode: staff.staffCode, // แก้ไขจาก staff_code เป็น staffCode
-          fullName: `${staff.firstName} ${staff.lastName}`, // แก้ไขจาก first_name, last_name เป็น firstName, lastName
+          employeeCode: staff.employeeCode,
+          fullName: staff.fullName,
+          fullNameEn: staff.fullNameEn,
+          brandId: staff.brandId,
+          brandCode: staff.brand?.code,
         },
         lineInfo: {
           userId: lineProfile.userId,
@@ -256,61 +214,46 @@ export class LineIntegrationService {
    */
   async linkStaffSimple(linkDto: SimpleLinkDto) {
     try {
-      const { staffCode, lineUserId, lineDisplayName, linePictureUrl } = linkDto;
+      const { staffCode: employeeCode, lineUserId, lineDisplayName, linePictureUrl } = linkDto;
 
       console.log('📍 Simple Link Request:', {
-        staffCode,
+        employeeCode,
         lineUserId,
         hasDisplayName: !!lineDisplayName,
         hasPictureUrl: !!linePictureUrl,
       });
 
-      // 1. ตรวจสอบว่า line user id นี้เชื่อมโยงกับพนักงานอื่นไปแล้วหรือไม่
-      const existingLinkedStaff = await this.staffRepository.findOne({
+      // 1. ตรวจสอบว่า line user id นี้เชื่อมโยงกับพนักงานอื่นไปแล้วหรือไม่ (ใช้ LineUser table)
+      const existingLineUser = await this.lineUserRepository.findOne({
         where: { lineUserId },
-        select: ['id', 'staffCode', 'lineUserId', 'firstName', 'lastName'],
+        relations: ['staff'],
       });
 
-      if (existingLinkedStaff) {
-        console.log('❌ LINE already linked to:', existingLinkedStaff.staffCode);
+      if (existingLineUser && existingLineUser.staffId) {
+        const linkedStaff = existingLineUser.staff;
+        console.log('❌ LINE already linked to:', linkedStaff.employeeCode);
         throw new HttpException(
-          `LINE นี้ได้เชื่อมโยงกับพนักงาน ${existingLinkedStaff.staffCode} (${existingLinkedStaff.firstName} ${existingLinkedStaff.lastName}) แล้ว`,
+          `LINE นี้ได้เชื่อมโยงกับพนักงาน ${linkedStaff.employeeCode} (${linkedStaff.fullName}) แล้ว`,
           HttpStatus.CONFLICT,
         );
       }
 
       // 2. ตรวจสอบว่ามีพนักงานที่มีรหัสตามที่ระบุหรือไม่
       const staff = await this.staffRepository.findOne({
-        where: { staffCode: staffCode },
-        select: [
-          'id',
-          'staffCode',
-          'firstName',
-          'lastName',
-          'position',
-          'department',
-          'phone',
-          'email',
-          'role',
-          'status',
-          'lineUserId',
-          'lineDisplayName',
-          'linePictureUrl',
-          'lineLastLoginAt',
-          'isLineLinked',
-        ],
+        where: { employeeCode },
+        relations: ['brand'],
       });
 
       if (!staff) {
-        console.log('❌ Staff not found:', staffCode);
+        console.log('❌ Staff not found:', employeeCode);
         throw new HttpException(
-          `ไม่พบข้อมูลพนักงานรหัส ${staffCode}`,
+          `ไม่พบข้อมูลพนักงานรหัส ${employeeCode}`,
           HttpStatus.NOT_FOUND,
         );
       }
 
       if (staff.status !== 'active') {
-        console.log('❌ Staff inactive:', staffCode);
+        console.log('❌ Staff inactive:', employeeCode);
         throw new HttpException(
           'พนักงานไม่อยู่ในสถานะที่สามารถเชื่อมโยงได้',
           HttpStatus.BAD_REQUEST,
@@ -318,39 +261,54 @@ export class LineIntegrationService {
       }
 
       // 3. ตรวจสอบว่าพนักงานคนนี้เชื่อมโยง LINE อื่นอยู่หรือไม่
-      if (staff.lineUserId && staff.lineUserId !== lineUserId) {
-        console.log('❌ Staff already linked to another LINE:', staff.lineUserId);
+      const existingStaffLink = await this.lineUserRepository.findOne({
+        where: { staffId: staff.id },
+      });
+
+      if (existingStaffLink && existingStaffLink.lineUserId !== lineUserId) {
+        console.log('❌ Staff already linked to another LINE:', existingStaffLink.lineUserId);
         throw new HttpException(
           'พนักงานคนนี้ได้เชื่อมโยง LINE อื่นไว้แล้ว กรุณาติดต่อแอดมิน',
           HttpStatus.CONFLICT,
         );
       }
 
-      // 4. บันทึกข้อมูลการเชื่อมโยง
-      staff.lineUserId = lineUserId;
-      if (lineDisplayName) staff.lineDisplayName = lineDisplayName;
-      if (linePictureUrl) staff.linePictureUrl = linePictureUrl;
-      staff.lineLastLoginAt = new Date();
-      staff.isLineLinked = true;
+      // 4. บันทึกข้อมูลการเชื่อมโยงใน LineUser table
+      if (existingLineUser) {
+        // Update existing LineUser record
+        existingLineUser.staffId = staff.id;
+        if (lineDisplayName) existingLineUser.displayName = lineDisplayName;
+        if (linePictureUrl) existingLineUser.pictureUrl = linePictureUrl;
+        await this.lineUserRepository.save(existingLineUser);
+      } else {
+        // Create new LineUser record
+        const newLineUser = this.lineUserRepository.create({
+          lineUserId,
+          staffId: staff.id,
+          displayName: lineDisplayName || '',
+          pictureUrl: linePictureUrl || '',
+          
+        });
+        await this.lineUserRepository.save(newLineUser);
+      }
 
-      await this.staffRepository.save(staff);
-
-      console.log('✅ Simple link successful:', staffCode, '<->', lineUserId);
+      console.log('✅ Simple link successful:', employeeCode, '<->', lineUserId);
 
       // 5. สร้าง JWT token
       const payload = {
         sub: staff.id,
         id: staff.id,
-        staffCode: staff.staffCode,
-        lineUserId: staff.lineUserId,
+        employeeCode: staff.employeeCode,
+        lineUserId,
         role: staff.role || 'staff',
-        department: staff.department,
+        brandId: staff.brandId,
+        brandCode: staff.brand?.code,
       };
 
       const token = this.jwtService.sign(payload);
 
       this.logger.log(
-        `✅ LINE linked successfully: Staff ${staffCode} <-> LINE User ${lineUserId}`,
+        `✅ LINE linked successfully: Staff ${employeeCode} <-> LINE User ${lineUserId}`,
       );
 
       return {
@@ -359,15 +317,14 @@ export class LineIntegrationService {
         access_token: token,
         staff: {
           id: staff.id,
-          staffCode: staff.staffCode,
-          fullName: `${staff.firstName} ${staff.lastName}`,
-          firstName: staff.firstName,
-          lastName: staff.lastName,
-          department: staff.department,
-          position: staff.position,
+          employeeCode: staff.employeeCode,
+          fullName: staff.fullName,
+          fullNameEn: staff.fullNameEn,
+          brandId: staff.brandId,
+          brandCode: staff.brand?.code,
           role: staff.role || 'staff',
-          lineUserId: staff.lineUserId,
-          lineDisplayName: staff.lineDisplayName,
+          lineUserId,
+          lineDisplayName: lineDisplayName || '',
         },
       };
     } catch (error) {
@@ -389,48 +346,36 @@ export class LineIntegrationService {
    * @param staffId ID ของพนักงาน
    * @returns ข้อมูลพนักงาน
    */
-  async getStaffById(staffId: string) {
+  async getStaffById(staffId: number) {
     try {
-      // ✅ ระบุ columns ที่ต้องการ
       const staff = await this.staffRepository.findOne({
         where: { id: staffId },
-        select: [
-          'id',
-          'staffCode',
-          'firstName',
-          'lastName',
-          'position',
-          'department',
-          'phone',
-          'email',
-          'role',
-          'status',
-          'lineUserId',
-          'lineDisplayName',
-          'linePictureUrl',
-          'lineLastLoginAt',
-          'isLineLinked',
-        ],
+        relations: ['brand'],
       });
 
       if (!staff) {
         throw new HttpException('ไม่พบข้อมูลพนักงาน', HttpStatus.NOT_FOUND);
       }
 
+      // ดึงข้อมูล LINE จาก LineUser table
+      const lineUser = await this.lineUserRepository.findOne({
+        where: { staffId: staff.id },
+      });
+
       return {
         id: staff.id,
-        staffCode: staff.staffCode,
-        firstName: staff.firstName,
-        lastName: staff.lastName,
-        position: staff.position,
-        department: staff.department,
+        employeeCode: staff.employeeCode,
+        fullName: staff.fullName,
+        fullNameEn: staff.fullNameEn,
+        brandId: staff.brandId,
+        brandCode: staff.brand?.code,
         status: staff.status,
-        lineInfo: staff.lineUserId
+        lineInfo: lineUser
           ? {
-              userId: staff.lineUserId,
-              displayName: staff.lineDisplayName,
-              pictureUrl: staff.linePictureUrl,
-              lastLoginAt: staff.lineLastLoginAt,
+              userId: lineUser.lineUserId,
+              displayName: lineUser.displayName,
+              pictureUrl: lineUser.pictureUrl,
+              
             }
           : null,
       };
@@ -555,10 +500,10 @@ export class LineIntegrationService {
           staff: user.staff
             ? {
                 staff_id: user.staff.id,
-                staff_code: user.staff.staffCode,
-                full_name: `${user.staff.firstName} ${user.staff.lastName}`,
-                position: user.staff.position,
-                department: user.staff.department,
+                employee_code: user.staff.employeeCode,
+                full_name: user.staff.fullName,
+                full_name_en: user.staff.fullNameEn,
+                brand_id: user.staff.brandId,
               }
             : null,
         })),
@@ -605,11 +550,10 @@ export class LineIntegrationService {
       if (lineUser.staffId) {
         const existingStaff = await queryRunner.manager.findOne(Staff, {
           where: { id: lineUser.staffId },
-          select: ['staffCode', 'firstName', 'lastName'],
         });
         if (existingStaff) {
           throw new HttpException(
-            `LINE user นี้ได้เชื่อมโยงกับพนักงาน ${existingStaff.staffCode} (${existingStaff.firstName} ${existingStaff.lastName}) แล้ว`,
+            `LINE user นี้ได้เชื่อมโยงกับพนักงาน ${existingStaff.employeeCode} (${existingStaff.fullName}) แล้ว`,
             HttpStatus.CONFLICT,
           );
         }
@@ -618,17 +562,7 @@ export class LineIntegrationService {
       // 3. ตรวจสอบว่าพนักงานมีอยู่จริง
       const staff = await queryRunner.manager.findOne(Staff, {
         where: { id: staffId },
-        select: [
-          'id',
-          'staffCode',
-          'firstName',
-          'lastName',
-          'position',
-          'department',
-          'role',
-          'status',
-          'lineUserId',
-        ],
+        relations: ['brand'],
       });
 
       if (!staff) {
@@ -646,28 +580,22 @@ export class LineIntegrationService {
       }
 
       // 4. ตรวจสอบว่าพนักงานยังไม่ได้เชื่อมโยงกับ LINE อื่น
-      if (staff.lineUserId && staff.lineUserId !== lineUserId) {
+      const existingStaffLink = await queryRunner.manager.findOne(LineUser, {
+        where: { staffId },
+      });
+
+      if (existingStaffLink && existingStaffLink.lineUserId !== lineUserId) {
         throw new HttpException(
-          `พนักงาน ${staff.staffCode} ได้เชื่อมโยงกับ LINE อื่นแล้ว (${staff.lineUserId})`,
+          `พนักงาน ${staff.employeeCode} ได้เชื่อมโยงกับ LINE อื่นแล้ว (${existingStaffLink.lineUserId})`,
           HttpStatus.CONFLICT,
         );
       }
 
       // 5. อัปเดตตาราง line_users
-      await queryRunner.manager.update(LineUser, { lineUserId }, { staffId });
-
-      // 6. อัปเดตตาราง staffs
-      await queryRunner.manager.update(
-        Staff,
-        { id: staffId },
-        {
-          lineUserId: lineUserId,
-          lineDisplayName: lineUser.displayName,
-          linePictureUrl: lineUser.pictureUrl,
-          lineLastLoginAt: new Date(),
-          isLineLinked: true,
-        },
-      );
+      await queryRunner.manager.update(LineUser, { lineUserId }, {
+        staffId,
+        
+      });
 
       // 7. สร้างหรืออัปเดตตาราง line_profiles
       const existingProfile = await queryRunner.manager.findOne(LineProfile, {
@@ -681,7 +609,7 @@ export class LineIntegrationService {
           {
             displayName: lineUser.displayName,
             pictureUrl: lineUser.pictureUrl,
-            lastLoginAt: new Date(),
+            
           },
         );
       } else {
@@ -689,7 +617,7 @@ export class LineIntegrationService {
           lineUserId: lineUserId,
           displayName: lineUser.displayName,
           pictureUrl: lineUser.pictureUrl,
-          lastLoginAt: new Date(),
+          
         });
         await queryRunner.manager.save(newProfile);
       }
@@ -698,11 +626,11 @@ export class LineIntegrationService {
       await queryRunner.commitTransaction();
 
       console.log(
-        `✅ Admin link successful: ${staff.staffCode} <-> ${lineUserId}`,
+        `✅ Admin link successful: ${staff.employeeCode} <-> ${lineUserId}`,
       );
 
       this.logger.log(
-        `✅ Admin linked LINE user ${lineUserId} to staff ${staff.staffCode}`,
+        `✅ Admin linked LINE user ${lineUserId} to staff ${staff.employeeCode}`,
       );
 
       return {
@@ -712,10 +640,11 @@ export class LineIntegrationService {
           line_user_id: lineUserId,
           staff: {
             staff_id: staff.id,
-            staff_code: staff.staffCode,
-            full_name: `${staff.firstName} ${staff.lastName}`,
-            position: staff.position,
-            department: staff.department,
+            employee_code: staff.employeeCode,
+            full_name: staff.fullName,
+            full_name_en: staff.fullNameEn,
+            brand_id: staff.brandId,
+            brand_code: staff.brand?.code,
           },
         },
       };
@@ -777,42 +706,27 @@ export class LineIntegrationService {
       // 2. ค้นหาข้อมูลพนักงานเพื่อ logging
       const staff = await queryRunner.manager.findOne(Staff, {
         where: { id: staffId },
-        select: ['id', 'staffCode', 'firstName', 'lastName'],
       });
 
-      // 3. ยกเลิกการเชื่อมโยงในตาราง line_users
+      // 3. ยกเลิกการเชื่อมโยงในตาราง line_users (set staffId เป็น null)
       await queryRunner.manager.update(
         LineUser,
         { lineUserId },
-        { staffId: undefined },
+        { staffId: null as any },
       );
 
-      // 4. ยกเลิกการเชื่อมโยงในตาราง staffs
-      if (staff) {
-        await queryRunner.manager.update(
-          Staff,
-          { id: staffId },
-          {
-            lineUserId: undefined,
-            lineDisplayName: undefined,
-            linePictureUrl: undefined,
-            isLineLinked: false,
-          },
-        );
-      }
-
-      // 5. ลบข้อมูลใน line_profiles (optional - ถ้าต้องการเก็บ history ไว้ให้ comment ออก)
+      // 4. ลบข้อมูลใน line_profiles (optional - ถ้าต้องการเก็บ history ไว้ให้ comment ออก)
       await queryRunner.manager.delete(LineProfile, { lineUserId });
 
-      // 6. Commit transaction
+      // 5. Commit transaction
       await queryRunner.commitTransaction();
 
       console.log(
-        `✅ Admin unlink successful: ${staff?.staffCode || staffId} <-> ${lineUserId}`,
+        `✅ Admin unlink successful: ${staff?.employeeCode || staffId} <-> ${lineUserId}`,
       );
 
       this.logger.log(
-        `✅ Admin unlinked LINE user ${lineUserId} from staff ${staff?.staffCode || staffId}`,
+        `✅ Admin unlinked LINE user ${lineUserId} from staff ${staff?.employeeCode || staffId}`,
       );
 
       return {
@@ -823,8 +737,9 @@ export class LineIntegrationService {
           staff: staff
             ? {
                 staff_id: staff.id,
-                staff_code: staff.staffCode,
-                full_name: `${staff.firstName} ${staff.lastName}`,
+                employee_code: staff.employeeCode,
+                full_name: staff.fullName,
+                full_name_en: staff.fullNameEn,
               }
             : null,
         },
