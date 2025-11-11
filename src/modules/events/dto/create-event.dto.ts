@@ -1,4 +1,4 @@
-import { IsString, IsEnum, IsDateString, IsOptional, IsArray, MaxLength, IsUUID } from 'class-validator';
+import { IsString, IsEnum, IsDateString, IsOptional, IsArray, MaxLength, IsUUID, IsNumber } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { EventType } from '../entities/event-type.enum';
 import { EventStatus } from '../entities/event-status.enum';
@@ -66,4 +66,13 @@ export class CreateEventDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @ApiPropertyOptional({
+    example: 1,
+    description: 'รหัสแบรนด์ (1=ISUZU, 2=BYD)',
+    default: 1,
+  })
+  @IsOptional()
+  @IsNumber()
+  brandId?: number;
 }

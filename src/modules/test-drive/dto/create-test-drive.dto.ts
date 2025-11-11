@@ -93,12 +93,22 @@ export class CreateTestDriveDto {
   @IsNotEmpty()
   responsible_staff: number;
 
-  @ApiPropertyOptional({ 
-    enum: TestDriveStatus, 
+  @ApiPropertyOptional({
+    enum: TestDriveStatus,
     default: TestDriveStatus.PENDING,
     description: 'สถานะการทดลองขับ'
   })
   @IsOptional()
   @IsEnum(TestDriveStatus)
   status?: TestDriveStatus;
+
+  @ApiPropertyOptional({
+    example: 1,
+    description: 'รหัสแบรนด์ (1=ISUZU, 2=BYD)',
+    type: Number,
+    default: 1,
+  })
+  @IsOptional()
+  @IsNumber()
+  brand_id?: number;
 }

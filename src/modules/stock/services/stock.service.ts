@@ -6,6 +6,7 @@ import { Vehicle } from '../entities/vehicle.entity';
 import { FileUpload } from '../entities/file-upload.entity';
 import { CreateVehicleDto } from '../dto/create-vehicle.dto';
 import { UpdateVehicleDto } from '../dto/update-vehicle.dto';
+import { BrandService } from '../../brand/brand.service';
 import * as ExcelJS from 'exceljs';
 import { Express } from 'express';
 import * as crypto from 'crypto';
@@ -32,19 +33,37 @@ export class StockService {
     private vehicleRepository: Repository<Vehicle>,
     @InjectRepository(FileUpload)
     private fileUploadRepository: Repository<FileUpload>,
+    private brandService: BrandService,
   ) {}
 
   async createVehicle(createVehicleDto: CreateVehicleDto): Promise<Vehicle> {
-    const vehicle = this.vehicleRepository.create(createVehicleDto);
+    // Set default brandId to 1 (ISUZU) if not provided
+    const vehicleData = {
+      ...createVehicleDto,
+      brandId: createVehicleDto.brandId || 1,
+    };
+
+    const vehicle = this.vehicleRepository.create(vehicleData);
     return await this.vehicleRepository.save(vehicle);
   }
 
-  async findAll(): Promise<Vehicle[]> {
-    return await this.vehicleRepository.find();
+  async findAll(brandId?: number): Promise<Vehicle[]> {
+    const queryBuilder = this.vehicleRepository
+      .createQueryBuilder('vehicle')
+      .leftJoinAndSelect('vehicle.brand', 'brand');
+
+    if (brandId) {
+      queryBuilder.andWhere('vehicle.brandId = :brandId', { brandId });
+    }
+
+    return await queryBuilder.orderBy('vehicle.createdAt', 'DESC').getMany();
   }
 
   async findOne(id: number): Promise<Vehicle> {
-    const vehicle = await this.vehicleRepository.findOne({ where: { id } });
+    const vehicle = await this.vehicleRepository.findOne({
+      where: { id },
+      relations: ['brand'],
+    });
     if (!vehicle) {
       throw new NotFoundException(`Vehicle #${id} not found`);
     }
@@ -92,7 +111,25 @@ export class StockService {
   }
 
   async getVehicles(filters: any) {
-    const queryBuilder = this.vehicleRepository.createQueryBuilder('vehicle');
+    const queryBuilder = this.vehicleRepository
+      .createQueryBuilder('vehicle')
+      .leftJoinAndSelect('vehicle.brand', 'brand');
+
+    // Brand filtering (support both brand ID and brand code)
+    if (filters.brand || filters.brandId) {
+      const brandParam = filters.brand || filters.brandId;
+
+      // Check if it's a number (brand ID) or string (brand code)
+      if (!isNaN(Number(brandParam))) {
+        queryBuilder.andWhere('vehicle.brandId = :brandId', {
+          brandId: Number(brandParam)
+        });
+      } else {
+        // Brand code (e.g., 'ISUZU', 'BYD')
+        const brandId = await this.brandService.getIdByCode(brandParam.toString());
+        queryBuilder.andWhere('vehicle.brandId = :brandId', { brandId });
+      }
+    }
 
     if (filters.carCard) {
       queryBuilder.andWhere('vehicle.vehicleCode LIKE :carCard', {
@@ -384,7 +421,8 @@ export class StockService {
             batteryNumber: row['BATTERY No.']?.trim() || '',
             carType: row['Car Type']?.trim() || '',
             allocationDate,
-            price
+            price,
+            brandId: 1, // Default to ISUZU for Excel imports
           };
 
           const vehicle = await this.createVehicle(vehicleDto);

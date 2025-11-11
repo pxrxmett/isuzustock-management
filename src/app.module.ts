@@ -14,6 +14,7 @@ import { LineIntegrationModule } from './modules/line-integration/line-integrati
 import { EventsModule } from './modules/events/events.module';
 import { UsersModule } from './modules/users/users.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
+import { BrandModule } from './modules/brand/brand.module';
 import { AppController } from './app.controller';
 
 @Module({
@@ -48,6 +49,7 @@ import { AppController } from './app.controller';
     AuthModule,
     UsersModule,
     AnalyticsModule,
+    BrandModule,
     StockModule,
     TestDriveModule,
     StaffModule,

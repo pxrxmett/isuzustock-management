@@ -5,10 +5,12 @@ import { TestDriveService } from './services/test-drive.service';
 import { TestDrive } from './entities/test-drive.entity';
 import { Vehicle } from '../stock/entities/vehicle.entity';
 import { Staff } from '../staff/entities/staff.entity';
+import { BrandModule } from '../brand/brand.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([TestDrive, Vehicle, Staff])
+    TypeOrmModule.forFeature([TestDrive, Vehicle, Staff]),
+    BrandModule,
   ],
   controllers: [TestDriveController],
   providers: [TestDriveService],

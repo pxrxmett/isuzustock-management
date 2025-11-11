@@ -1,6 +1,7 @@
 // src/modules/stock/entities/vehicle.entity.ts
-import { Entity, Column, PrimaryGeneratedColumn, OneToMany } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, OneToMany, ManyToOne, JoinColumn } from 'typeorm';
 import { TestDrive } from '../../test-drive/entities/test-drive.entity';
+import { Brand } from '../../brand/entities/brand.entity';
 
 export enum VehicleStatus {
   AVAILABLE = 'available',
@@ -14,6 +15,14 @@ export enum VehicleStatus {
 export class Vehicle {
   @PrimaryGeneratedColumn()
   id: number;
+
+  // ⭐ เพิ่ม brand relationship
+  @Column({ name: 'brand_id', default: 1 })
+  brandId: number;
+
+  @ManyToOne(() => Brand)
+  @JoinColumn({ name: 'brand_id' })
+  brand: Brand;
 
   @Column({ unique: true })
   vehicleCode: string;

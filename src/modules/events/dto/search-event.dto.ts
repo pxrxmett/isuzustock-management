@@ -1,10 +1,21 @@
-import { IsOptional, IsEnum, IsDateString, IsString, IsBoolean } from 'class-validator';
+import { IsOptional, IsEnum, IsDateString, IsString, IsBoolean, IsNumber } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { EventType } from '../entities/event-type.enum';
 import { EventStatus } from '../entities/event-status.enum';
 import { Transform } from 'class-transformer';
 
 export class SearchEventDto {
+  @ApiPropertyOptional({ example: 'ISUZU', description: 'กรองตามแบรนด์ (รหัสหรือชื่อ)' })
+  @IsOptional()
+  @IsString()
+  brand?: string;
+
+  @ApiPropertyOptional({ example: 1, description: 'กรองตามรหัสแบรนด์' })
+  @IsOptional()
+  @Transform(({ value }) => parseInt(value, 10))
+  @IsNumber()
+  brandId?: number;
+
   @ApiPropertyOptional({ enum: EventStatus, description: 'กรองตามสถานะงาน' })
   @IsOptional()
   @IsEnum(EventStatus)

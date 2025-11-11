@@ -1,86 +1,127 @@
 import {
   Entity,
   Column,
-  PrimaryColumn,
+  PrimaryGeneratedColumn,
+  ManyToOne,
+  OneToMany,
+  JoinColumn,
   CreateDateColumn,
   UpdateDateColumn,
-  OneToMany,
   Index,
-  BeforeInsert,
 } from 'typeorm';
-import { TestDrive } from '../../test-drive/entities/test-drive.entity';
-import { v4 as uuidv4 } from 'uuid';
+import { Brand } from '../../brand/entities/brand.entity';
 
-@Entity('staffs')
-// ❌ ลบบรรทัดนี้: @Index('IDX_STAFF_USERNAME', ['username'], { unique: true })
+export enum StaffRole {
+  ADMIN = 'admin',
+  MANAGER = 'manager',
+  SALES = 'sales',
+}
+
+export enum StaffStatus {
+  ACTIVE = 'active',
+  INACTIVE = 'inactive',
+  ON_LEAVE = 'on_leave',
+}
+
+@Entity('staff')
+@Index('IDX_STAFF_BRAND_ROLE', ['brandId', 'role'])
+@Index('IDX_STAFF_BRAND_STATUS', ['brandId', 'status'])
+@Index('IDX_STAFF_EMPLOYEE_CODE', ['employeeCode'])
+@Index('IDX_STAFF_EMAIL', ['email'])
 export class Staff {
-  @PrimaryColumn('uuid')
-  id: string;
+  @PrimaryGeneratedColumn()
+  id: number;
 
-  @BeforeInsert()
-  generateId() {
-    if (!this.id) {
-      this.id = uuidv4();
-    }
-  }
+  // Brand Relationship
+  @Column({ name: 'brand_id', nullable: false })
+  @Index('IDX_STAFF_BRAND_ID')
+  brandId: number;
 
-  @Column({ name: 'staff_code', unique: true })
-  staffCode: string;
+  @ManyToOne(() => Brand, { eager: false })
+  @JoinColumn({ name: 'brand_id' })
+  brand: Brand;
 
-  @Column({ name: 'first_name' })
-  firstName: string;
+  // Employee Information
+  @Column({
+    name: 'employee_code',
+    type: 'varchar',
+    length: 20,
+    unique: true,
+    nullable: false,
+  })
+  employeeCode: string;
 
-  @Column({ name: 'last_name' })
-  lastName: string;
+  @Column({
+    name: 'full_name',
+    type: 'varchar',
+    length: 100,
+    nullable: false,
+  })
+  fullName: string;
 
-  @Column()
-  position: string;
+  @Column({
+    name: 'full_name_en',
+    type: 'varchar',
+    length: 100,
+    nullable: true,
+  })
+  fullNameEn: string | null;
 
-  @Column()
-  department: string;
-
-  @Column()
-  phone: string;
-
-  @Column()
+  @Column({
+    type: 'varchar',
+    length: 100,
+    unique: true,
+    nullable: false,
+  })
   email: string;
 
-  // ❌ ลบ 2 บรรทัดนี้:
-  // @Column({ unique: true, nullable: true })
-  // username: string;
+  @Column({
+    type: 'varchar',
+    length: 20,
+    nullable: false,
+  })
+  phone: string;
 
-  // ❌ ลบ 2 บรรทัดนี้:
-  // @Column({ name: 'password_hash', nullable: true })
-  // passwordHash: string;
+  // Role & Status
+  @Column({
+    type: 'enum',
+    enum: StaffRole,
+    default: StaffRole.SALES,
+    nullable: false,
+  })
+  role: StaffRole;
 
-  @Column({ default: 'staff' })
-  role: string;
+  @Column({
+    type: 'enum',
+    enum: StaffStatus,
+    default: StaffStatus.ACTIVE,
+    nullable: false,
+  })
+  status: StaffStatus;
 
-  @Column({ default: 'active' })
-  status: string;
+  // Profile
+  @Column({
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+  })
+  avatar: string | null;
 
-  @Column({ name: 'line_user_id', nullable: true, unique: true })
-  @Index('IDX_STAFF_LINE_USER_ID')
-  lineUserId: string;
-
-  @Column({ name: 'line_display_name', nullable: true })
-  lineDisplayName: string;
-
-  @Column({ name: 'line_picture_url', nullable: true })
-  linePictureUrl: string;
-
-  @Column({ name: 'line_last_login_at', nullable: true })
-  lineLastLoginAt: Date;
-
-  @Column({ name: 'is_line_linked', type: 'tinyint', default: 0 })
-  isLineLinked: boolean;
-
-  @OneToMany(() => TestDrive, (testDrive) => testDrive.staff)
-  testDrives: TestDrive[];
-
+  // Timestamps
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
+
+  // Relations to Test Drives and Events will be added when those entities are updated
+  // For now, we define them as optional to avoid circular dependency issues
+  // @OneToMany(() => TestDrive, (testDrive) => testDrive.assignedStaff)
+  // assignedTestDrives?: TestDrive[];
+
+  // @OneToMany(() => TestDrive, (testDrive) => testDrive.createdBy)
+  // createdTestDrives?: TestDrive[];
+
+  // @OneToMany(() => Event, (event) => event.coordinator)
+  // coordinatedEvents?: Event[];
 }

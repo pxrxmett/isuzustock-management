@@ -1,40 +1,82 @@
-// src/modules/staff/dto/create-staff.dto.ts
-import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString, IsEmail } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsEmail,
+  IsEnum,
+  IsOptional,
+  Matches,
+  Length,
+} from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { StaffRole } from '../entities/staff.entity';
 
 export class CreateStaffDto {
-  @ApiProperty({ example: 'STAFF001' })
-  @IsNotEmpty()
+  @ApiProperty({
+    description: 'รหัสพนักงาน (Format: แบรนด์ + เลข 3 หลัก เช่น ISU001, BYD001)',
+    example: 'ISU001',
+  })
   @IsString()
-  staff_code: string;
+  @IsNotEmpty({ message: 'Employee code is required' })
+  @Matches(/^[A-Z]{3}\d{3}$/, {
+    message: 'Employee code must be in format: 3 uppercase letters + 3 digits (e.g., ISU001)',
+  })
+  employeeCode: string;
 
-  @ApiProperty({ example: 'จอห์น' })
-  @IsNotEmpty()
+  @ApiProperty({
+    description: 'ชื่อ-นามสกุลเต็ม (ภาษาไทย)',
+    example: 'สมชาย ใจดี',
+  })
   @IsString()
-  first_name: string;
+  @IsNotEmpty({ message: 'Full name is required' })
+  @Length(2, 100, { message: 'Full name must be between 2 and 100 characters' })
+  fullName: string;
 
-  @ApiProperty({ example: 'โด' })
-  @IsNotEmpty()
+  @ApiPropertyOptional({
+    description: 'ชื่อ-นามสกุล (ภาษาอังกฤษ)',
+    example: 'Somchai Jaidee',
+  })
+  @IsOptional()
   @IsString()
-  last_name: string;
+  @Length(2, 100, { message: 'English name must be between 2 and 100 characters' })
+  fullNameEn?: string;
 
-  @ApiProperty({ example: 'พนักงานขาย' })
-  @IsNotEmpty()
-  @IsString()
-  position: string;
+  @ApiProperty({
+    description: 'อีเมล (ต้อง unique ในระบบ)',
+    example: 'somchai.j@noknguekotto.com',
+  })
+  @IsEmail({}, { message: 'Invalid email format' })
+  @IsNotEmpty({ message: 'Email is required' })
+  email: string;
 
-  @ApiProperty({ example: 'ฝ่ายขาย' })
-  @IsNotEmpty()
+  @ApiProperty({
+    description: 'เบอร์โทรศัพท์',
+    example: '0812345678',
+  })
   @IsString()
-  department: string;
-
-  @ApiProperty({ example: '0812345678' })
-  @IsNotEmpty()
-  @IsString()
+  @IsNotEmpty({ message: 'Phone number is required' })
+  @Matches(/^0[0-9]{8,9}$/, {
+    message: 'Phone number must start with 0 and be 9-10 digits',
+  })
   phone: string;
 
-  @ApiProperty({ example: 'john@example.com' })
-  @IsNotEmpty()
-  @IsEmail()
-  email: string;
+  @ApiPropertyOptional({
+    description: 'บทบาทพนักงาน',
+    enum: StaffRole,
+    default: StaffRole.SALES,
+    example: StaffRole.SALES,
+  })
+  @IsOptional()
+  @IsEnum(StaffRole, { message: 'Role must be admin, manager, or sales' })
+  role?: StaffRole;
+
+  @ApiPropertyOptional({
+    description: 'URL รูปโปรไฟล์',
+    example: 'https://example.com/avatar.jpg',
+  })
+  @IsOptional()
+  @IsString()
+  avatar?: string;
+
+  // Note: brandId จะถูก inject จาก URL path โดย Controller
+  // ไม่ต้องรับจาก body เพื่อป้องกัน cross-brand attack
 }
