@@ -1,9 +1,3 @@
-// @ts-nocheck
-/**
- * TODO: THIS FILE NEEDS REFACTORING FOR NEW STAFF ENTITY
- * Staff entity no longer has testDrives relation defined.
- * Type checking temporarily disabled until refactoring is complete.
- */
 import {
   Entity,
   Column,
@@ -22,7 +16,6 @@ export class TestDrive {
   @PrimaryGeneratedColumn()
   id: number;
 
-  // ⭐ เพิ่ม brand relationship
   @Column({ name: 'brand_id', default: 1 })
   brandId: number;
 
@@ -74,10 +67,10 @@ export class TestDrive {
   @Column({ name: 'actual_end_time', nullable: true })
   actualEndTime: Date;
 
-  @Column({ name: 'responsible_staff' })
-  responsibleStaffId: string;
+  @Column({ name: 'responsible_staff', type: 'int' })
+  responsibleStaffId: number;
 
-  @ManyToOne(() => Staff, (staff) => staff.testDrives)
+  @ManyToOne(() => Staff, { eager: false })
   @JoinColumn({ name: 'responsible_staff' })
   staff: Staff;
 

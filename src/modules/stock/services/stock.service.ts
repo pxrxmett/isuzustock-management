@@ -1,8 +1,14 @@
 // stock.service.ts
-import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Vehicle } from '../entities/vehicle.entity';
+import { Vehicle, VehicleStatus } from '../entities/vehicle.entity';
 import { FileUpload } from '../entities/file-upload.entity';
 import { CreateVehicleDto } from '../dto/create-vehicle.dto';
 import { UpdateVehicleDto } from '../dto/update-vehicle.dto';
@@ -11,19 +17,18 @@ import * as ExcelJS from 'exceljs';
 import { Express } from 'express';
 import * as crypto from 'crypto';
 
-
 type ExcelRow = {
-  'No': string;
+  No: string;
   'Dealer Code': string;
   'Dealer Name': string;
-  'Model': string;
+  Model: string;
   'VIN No.': string;
   'Front Motor no.': string;
   'BATTERY No.': string;
-  'COLOR': string;
+  COLOR: string;
   'Car Type': string;
   'Allocation Date': string;
-  'Price': string;
+  Price: string;
 };
 
 @Injectable()
@@ -36,17 +41,32 @@ export class StockService {
     private brandService: BrandService,
   ) {}
 
-  async createVehicle(createVehicleDto: CreateVehicleDto): Promise<Vehicle> {
-    // Set default brandId to 1 (ISUZU) if not provided
+  /**
+   * สร้างรถใหม่ (บังคับ brandId จาก URL)
+   * @param createVehicleDto ข้อมูลรถ
+   * @param brandId รหัสแบรนด์จาก URL
+   */
+  async createVehicle(
+    createVehicleDto: CreateVehicleDto,
+    brandId: number,
+  ): Promise<Vehicle> {
+    // Validate brand exists
+    await this.brandService.findOne(brandId);
+
+    // Force brandId from URL, ignore body
     const vehicleData = {
       ...createVehicleDto,
-      brandId: createVehicleDto.brandId || 1,
+      brandId, // Override any brandId in DTO
     };
 
     const vehicle = this.vehicleRepository.create(vehicleData);
     return await this.vehicleRepository.save(vehicle);
   }
 
+  /**
+   * ดึงรายการรถทั้งหมด (ถ้ามี brandId จะกรองเฉพาะแบรนด์นั้น)
+   * @param brandId รหัสแบรนด์ (optional สำหรับ admin)
+   */
   async findAll(brandId?: number): Promise<Vehicle[]> {
     const queryBuilder = this.vehicleRepository
       .createQueryBuilder('vehicle')
@@ -59,47 +79,81 @@ export class StockService {
     return await queryBuilder.orderBy('vehicle.createdAt', 'DESC').getMany();
   }
 
-  async findOne(id: number): Promise<Vehicle> {
+  /**
+   * ดึงข้อมูลรถตาม ID พร้อม validate brand (ถ้ามี)
+   * @param id รหัสรถ
+   * @param brandId รหัสแบรนด์สำหรับ validate (optional สำหรับ admin)
+   */
+  async findOne(id: number, brandId?: number): Promise<Vehicle> {
     const vehicle = await this.vehicleRepository.findOne({
       where: { id },
       relations: ['brand'],
     });
+
     if (!vehicle) {
       throw new NotFoundException(`Vehicle #${id} not found`);
     }
+
+    // Validate brand ownership if brandId is provided
+    if (brandId !== undefined && vehicle.brandId !== brandId) {
+      throw new ForbiddenException(
+        `Vehicle #${id} does not belong to this brand`,
+      );
+    }
+
     return vehicle;
   }
 
-  async updateVehicle(id: number, updateVehicleDto: UpdateVehicleDto): Promise<Vehicle> {
-    const vehicle = await this.findOne(id);
+  /**
+   * อัปเดตข้อมูลรถ พร้อม validate brand
+   * @param id รหัสรถ
+   * @param updateVehicleDto ข้อมูลที่ต้องการอัปเดต
+   * @param brandId รหัสแบรนด์สำหรับ validate
+   */
+  async updateVehicle(
+    id: number,
+    updateVehicleDto: UpdateVehicleDto,
+    brandId?: number,
+  ): Promise<Vehicle> {
+    const vehicle = await this.findOne(id, brandId);
 
     // Check if vehicle is locked for event and prevent certain updates
-    if (vehicle.isLockedForEvent && updateVehicleDto.status && updateVehicleDto.status !== 'locked_for_event') {
+    if (
+      vehicle.isLockedForEvent &&
+      updateVehicleDto.status &&
+      updateVehicleDto.status !== 'locked_for_event'
+    ) {
       throw new BadRequestException(
-        'ไม่สามารถเปลี่ยนสถานะรถที่ถูกล็อคสำหรับงาน (Event) ได้'
+        'ไม่สามารถเปลี่ยนสถานะรถที่ถูกล็อคสำหรับงาน (Event) ได้',
       );
     }
 
     // Check if trying to update VIN number to one that already exists
-    if (updateVehicleDto.vinNumber && updateVehicleDto.vinNumber !== vehicle.vinNumber) {
+    if (
+      updateVehicleDto.vinNumber &&
+      updateVehicleDto.vinNumber !== vehicle.vinNumber
+    ) {
       const existingVehicle = await this.vehicleRepository.findOne({
-        where: { vinNumber: updateVehicleDto.vinNumber }
+        where: { vinNumber: updateVehicleDto.vinNumber },
       });
       if (existingVehicle) {
         throw new ConflictException(
-          `VIN Number ${updateVehicleDto.vinNumber} already exists in the system`
+          `VIN Number ${updateVehicleDto.vinNumber} already exists in the system`,
         );
       }
     }
 
     // Check if trying to update vehicle code to one that already exists
-    if (updateVehicleDto.vehicleCode && updateVehicleDto.vehicleCode !== vehicle.vehicleCode) {
+    if (
+      updateVehicleDto.vehicleCode &&
+      updateVehicleDto.vehicleCode !== vehicle.vehicleCode
+    ) {
       const existingVehicle = await this.vehicleRepository.findOne({
-        where: { vehicleCode: updateVehicleDto.vehicleCode }
+        where: { vehicleCode: updateVehicleDto.vehicleCode },
       });
       if (existingVehicle) {
         throw new ConflictException(
-          `Vehicle Code ${updateVehicleDto.vehicleCode} already exists in the system`
+          `Vehicle Code ${updateVehicleDto.vehicleCode} already exists in the system`,
         );
       }
     }
@@ -110,6 +164,10 @@ export class StockService {
     return await this.vehicleRepository.save(vehicle);
   }
 
+  /**
+   * ค้นหารถด้วยตัวกรองต่างๆ
+   * @param filters ตัวกรอง
+   */
   async getVehicles(filters: any) {
     const queryBuilder = this.vehicleRepository
       .createQueryBuilder('vehicle')
@@ -122,65 +180,82 @@ export class StockService {
       // Check if it's a number (brand ID) or string (brand code)
       if (!isNaN(Number(brandParam))) {
         queryBuilder.andWhere('vehicle.brandId = :brandId', {
-          brandId: Number(brandParam)
+          brandId: Number(brandParam),
         });
       } else {
         // Brand code (e.g., 'ISUZU', 'BYD')
-        const brandId = await this.brandService.getIdByCode(brandParam.toString());
+        const brandId = await this.brandService.getIdByCode(
+          brandParam.toString(),
+        );
         queryBuilder.andWhere('vehicle.brandId = :brandId', { brandId });
       }
     }
 
+    // Vehicle code filter
+    if (filters.vehicleCode) {
+      queryBuilder.andWhere('vehicle.vehicleCode LIKE :vehicleCode', {
+        vehicleCode: `%${filters.vehicleCode}%`,
+      });
+    }
+
+    // VIN Number filter
+    if (filters.vinNumber) {
+      queryBuilder.andWhere('vehicle.vinNumber LIKE :vinNumber', {
+        vinNumber: `%${filters.vinNumber}%`,
+      });
+    }
+
+    // Legacy filters for compatibility
     if (filters.carCard) {
       queryBuilder.andWhere('vehicle.vehicleCode LIKE :carCard', {
-        carCard: `%${filters.carCard}%`
+        carCard: `%${filters.carCard}%`,
       });
     }
 
-    if (filters.dlrId) {
+    if (filters.dlrId || filters.dealerCode) {
       queryBuilder.andWhere('vehicle.dealerCode LIKE :dlrId', {
-        dlrId: `%${filters.dlrId}%`
+        dlrId: `%${filters.dlrId || filters.dealerCode}%`,
       });
     }
 
-    if (filters.mdlCd || filters.modelCode || filters.modelGeneral) {
+    if (filters.mdlCd || filters.modelCode || filters.modelGeneral || filters.model) {
       queryBuilder.andWhere('vehicle.model LIKE :model', {
-        model: `%${filters.mdlCd || filters.modelCode || filters.modelGeneral}%`
+        model: `%${filters.mdlCd || filters.modelCode || filters.modelGeneral || filters.model}%`,
       });
     }
 
     if (filters.type) {
       queryBuilder.andWhere('vehicle.carType LIKE :carType', {
-        carType: `%${filters.type}%`
+        carType: `%${filters.type}%`,
       });
     }
 
     if (filters.color) {
       queryBuilder.andWhere('vehicle.color LIKE :color', {
-        color: `%${filters.color}%`
+        color: `%${filters.color}%`,
       });
     }
 
     if (filters.engineNo) {
       queryBuilder.andWhere('vehicle.frontMotor LIKE :frontMotor', {
-        frontMotor: `%${filters.engineNo}%`
+        frontMotor: `%${filters.engineNo}%`,
       });
     }
 
     if (filters.chassisNo) {
       queryBuilder.andWhere('vehicle.vinNumber LIKE :vinNumber', {
-        vinNumber: `%${filters.chassisNo}%`
+        vinNumber: `%${filters.chassisNo}%`,
       });
     }
 
     if (filters.status) {
       const statusMap = {
-        'พร้อมใช้งาน': 'available',
-        'ไม่พร้อมใช้งาน': 'unavailable',
-        'อยู่ในระหว่างการทดลองขับ': 'in_use'
+        พร้อมใช้งาน: 'available',
+        ไม่พร้อมใช้งาน: 'unavailable',
+        'อยู่ในระหว่างการทดลองขับ': 'in_use',
       };
       queryBuilder.andWhere('vehicle.status = :status', {
-        status: statusMap[filters.status] || filters.status
+        status: statusMap[filters.status] || filters.status,
       });
     }
 
@@ -188,7 +263,7 @@ export class StockService {
       .orderBy('vehicle.createdAt', 'DESC')
       .getMany();
 
-    return vehicles.map(vehicle => ({
+    return vehicles.map((vehicle) => ({
       id: vehicle.id,
       carCard: vehicle.vehicleCode,
       dlrId: vehicle.dealerCode,
@@ -199,44 +274,60 @@ export class StockService {
       color: vehicle.color,
       engineNo: vehicle.frontMotor,
       chassisNo: vehicle.vinNumber,
-      status: this.mapStatusToThai(vehicle.status)
+      status: this.mapStatusToThai(vehicle.status),
+      brandId: vehicle.brandId,
+      brandCode: vehicle.brand?.code,
+      brandName: vehicle.brand?.name,
     }));
   }
 
   private mapStatusToThai(status: string) {
     const statusMap = {
-      'available': 'พร้อมใช้งาน',
-      'unavailable': 'ไม่พร้อมใช้งาน',
-      'in_use': 'อยู่ในระหว่างการทดลองขับ'
+      available: 'พร้อมใช้งาน',
+      unavailable: 'ไม่พร้อมใช้งาน',
+      in_use: 'อยู่ในระหว่างการทดลองขับ',
+      maintenance: 'อยู่ระหว่างซ่อมบำรุง',
+      locked_for_event: 'ล็อคสำหรับงาน',
     };
     return statusMap[status] || status;
   }
 
-  async updateVehicleStatus(id: number, newStatus: string) {
-    const vehicle = await this.findOne(id);
-    
+  /**
+   * อัปเดตสถานะรถ พร้อม validate brand
+   * @param id รหัสรถ
+   * @param newStatus สถานะใหม่
+   * @param brandId รหัสแบรนด์สำหรับ validate
+   */
+  async updateVehicleStatus(id: number, newStatus: string, brandId?: number) {
+    const vehicle = await this.findOne(id, brandId);
+
     if (vehicle.status === 'in_use' && newStatus !== 'available') {
       throw new BadRequestException(
-        'ไม่สามารถเปลี่ยนสถานะรถที่อยู่ระหว่างการทดลองขับได้'
+        'ไม่สามารถเปลี่ยนสถานะรถที่อยู่ระหว่างการทดลองขับได้',
       );
     }
 
     const statusMap = {
-      'พร้อมใช้งาน': 'available',
-      'ไม่พร้อมใช้งาน': 'unavailable',
-      'อยู่ในระหว่างการทดลองขับ': 'in_use'
+      พร้อมใช้งาน: 'available',
+      ไม่พร้อมใช้งาน: 'unavailable',
+      'อยู่ในระหว่างการทดลองขับ': 'in_use',
     };
 
     vehicle.status = statusMap[newStatus] || newStatus;
     return await this.vehicleRepository.save(vehicle);
   }
 
-  async deleteVehicle(id: number) {
-    const vehicle = await this.findOne(id);
-    
+  /**
+   * ลบรถ พร้อม validate brand
+   * @param id รหัสรถ
+   * @param brandId รหัสแบรนด์สำหรับ validate
+   */
+  async deleteVehicle(id: number, brandId?: number) {
+    const vehicle = await this.findOne(id, brandId);
+
     if (vehicle.status === 'in_use') {
       throw new BadRequestException(
-        'ไม่สามารถลบรถที่อยู่ระหว่างการทดลองขับได้'
+        'ไม่สามารถลบรถที่อยู่ระหว่างการทดลองขับได้',
       );
     }
 
@@ -251,32 +342,44 @@ export class StockService {
   // ตรวจสอบเฉพาะ VIN Number ที่ซ้ำกัน
   private async checkDuplicateVin(vinNumber: string): Promise<boolean> {
     const vehicle = await this.vehicleRepository.findOne({
-      where: { vinNumber }
+      where: { vinNumber },
     });
     return !!vehicle;
   }
 
-  async processExcelFile(file: Express.Multer.File) {
+  /**
+   * ประมวลผลไฟล์ Excel พร้อมบังคับ brandId
+   * @param file ไฟล์ Excel
+   * @param brandId รหัสแบรนด์จาก URL
+   */
+  async processExcelFile(file: Express.Multer.File, brandId: number) {
     try {
+      // Validate brand exists
+      await this.brandService.findOne(brandId);
+
       // คำนวณ hash ของไฟล์
       const fileHash = this.calculateFileHash(file.buffer);
 
       // ตรวจสอบไฟล์ซ้ำโดยใช้ hash
       const existingFile = await this.fileUploadRepository.findOne({
-        where: { fileHash }
+        where: { fileHash },
       });
 
       if (existingFile) {
-        throw new ConflictException('ไฟล์นี้เคยอัพโหลดแล้ว ไม่สามารถอัพโหลดไฟล์ซ้ำได้');
+        throw new ConflictException(
+          'ไฟล์นี้เคยอัพโหลดแล้ว ไม่สามารถอัพโหลดไฟล์ซ้ำได้',
+        );
       }
 
       // ตรวจสอบชื่อไฟล์ซ้ำ (ทางเลือกเพิ่มเติม)
       const existingFileByName = await this.fileUploadRepository.findOne({
-        where: { fileName: file.originalname }
+        where: { fileName: file.originalname },
       });
 
       if (existingFileByName) {
-        throw new ConflictException('มีไฟล์ชื่อนี้อยู่ในระบบแล้ว กรุณาเปลี่ยนชื่อไฟล์');
+        throw new ConflictException(
+          'มีไฟล์ชื่อนี้อยู่ในระบบแล้ว กรุณาเปลี่ยนชื่อไฟล์',
+        );
       }
 
       // สร้างบันทึกการอัพโหลดไฟล์ใหม่
@@ -285,7 +388,7 @@ export class StockService {
         fileSize: file.size,
         mimeType: file.mimetype,
         fileHash: fileHash,
-        isProcessed: false
+        isProcessed: false,
       });
 
       await this.fileUploadRepository.save(fileUpload);
@@ -296,8 +399,15 @@ export class StockService {
       const worksheet = workbook.getWorksheet(1);
 
       if (!worksheet) {
-        await this.updateFileUploadStatus(fileUpload.id, 0, ['Excel file does not contain any worksheets'], true);
-        throw new BadRequestException('Excel file does not contain any worksheets');
+        await this.updateFileUploadStatus(
+          fileUpload.id,
+          0,
+          ['Excel file does not contain any worksheets'],
+          true,
+        );
+        throw new BadRequestException(
+          'Excel file does not contain any worksheets',
+        );
       }
 
       const data: ExcelRow[] = [];
@@ -309,7 +419,12 @@ export class StockService {
       const headers = firstRow.values as string[];
 
       if (!headers || headers.length === 0) {
-        await this.updateFileUploadStatus(fileUpload.id, 0, ['Excel file does not contain headers'], true);
+        await this.updateFileUploadStatus(
+          fileUpload.id,
+          0,
+          ['Excel file does not contain headers'],
+          true,
+        );
         throw new BadRequestException('Excel file does not contain headers');
       }
 
@@ -319,10 +434,10 @@ export class StockService {
         'Dealer Name',
         'Model',
         'VIN No.',
-        'COLOR'
+        'COLOR',
       ];
       const missingHeaders = requiredHeaders.filter(
-        header => !headers.includes(header)
+        (header) => !headers.includes(header),
       );
 
       if (missingHeaders.length > 0) {
@@ -330,10 +445,10 @@ export class StockService {
           fileUpload.id,
           0,
           [`Missing required headers: ${missingHeaders.join(', ')}`],
-          true
+          true,
         );
         throw new BadRequestException(
-          `Missing required headers: ${missingHeaders.join(', ')}`
+          `Missing required headers: ${missingHeaders.join(', ')}`,
         );
       }
 
@@ -363,31 +478,40 @@ export class StockService {
         try {
           // Validate required fields
           if (!row['Dealer Code']) {
-            throw new Error(`Missing Dealer Code in row ${data.indexOf(row) + 2}`);
+            throw new Error(
+              `Missing Dealer Code in row ${data.indexOf(row) + 2}`,
+            );
           }
           if (!row['Model']) {
             throw new Error(`Missing Model in row ${data.indexOf(row) + 2}`);
           }
           if (!row['VIN No.'] || row['VIN No.'].length !== 17) {
-            throw new Error(`Invalid VIN Number in row ${data.indexOf(row) + 2}`);
+            throw new Error(
+              `Invalid VIN Number in row ${data.indexOf(row) + 2}`,
+            );
           }
 
           // ตรวจสอบ VIN ซ้ำในฐานข้อมูล
-          const isDuplicateVin = await this.checkDuplicateVin(row['VIN No.'].trim());
+          const isDuplicateVin = await this.checkDuplicateVin(
+            row['VIN No.'].trim(),
+          );
           if (isDuplicateVin) {
             duplicateVins.push(row['VIN No.'].trim());
-            throw new Error(`VIN Number ${row['VIN No.'].trim()} already exists in database (row ${data.indexOf(row) + 2})`);
+            throw new Error(
+              `VIN Number ${row['VIN No.'].trim()} already exists in database (row ${data.indexOf(row) + 2})`,
+            );
           }
 
           // Generate unique vehicleCode
           const lastVehicle = await this.vehicleRepository.findOne({
-            where: { dealerCode: row['Dealer Code'] },
-            order: { vehicleCode: 'DESC' }
+            where: { dealerCode: row['Dealer Code'], brandId }, // Filter by brand
+            order: { vehicleCode: 'DESC' },
           });
 
           let vehicleNumber = '001';
           if (lastVehicle) {
-            const lastNumber = parseInt(lastVehicle.vehicleCode.split('-')[1]) || 0;
+            const lastNumber =
+              parseInt(lastVehicle.vehicleCode.split('-')[1]) || 0;
             vehicleNumber = (lastNumber + 1).toString().padStart(3, '0');
           }
           const vehicleCode = `${row['Dealer Code']}-${vehicleNumber}`;
@@ -397,7 +521,9 @@ export class StockService {
           if (row['Allocation Date']) {
             allocationDate = new Date(row['Allocation Date']);
             if (isNaN(allocationDate.getTime())) {
-              throw new Error(`Invalid Allocation Date in row ${data.indexOf(row) + 2}`);
+              throw new Error(
+                `Invalid Allocation Date in row ${data.indexOf(row) + 2}`,
+              );
             }
           }
 
@@ -406,7 +532,9 @@ export class StockService {
             const priceString = row['Price'].toString().replace(/[^0-9.]/g, '');
             price = parseFloat(priceString);
             if (isNaN(price)) {
-              throw new Error(`Invalid Price in row ${data.indexOf(row) + 2}`);
+              throw new Error(
+                `Invalid Price in row ${data.indexOf(row) + 2}`,
+              );
             }
           }
 
@@ -422,10 +550,10 @@ export class StockService {
             carType: row['Car Type']?.trim() || '',
             allocationDate,
             price,
-            brandId: 1, // Default to ISUZU for Excel imports
           };
 
-          const vehicle = await this.createVehicle(vehicleDto);
+          // Force brandId from URL
+          const vehicle = await this.createVehicle(vehicleDto, brandId);
           results.push(vehicle);
         } catch (error) {
           errors.push(error.message);
@@ -437,15 +565,15 @@ export class StockService {
         fileUpload.id,
         results.length,
         errors.length > 0 ? errors : undefined,
-        true
+        true,
       );
 
       // หากพบ VIN ซ้ำเป็นจำนวนมาก ให้รวมข้อความแจ้งเตือน
       let duplicateVinMessage = '';
       if (duplicateVins.length > 0) {
         duplicateVinMessage = `\nพบ VIN Number ซ้ำในระบบ: ${
-          duplicateVins.length > 10 
-            ? `${duplicateVins.slice(0, 10).join(', ')} และอีก ${duplicateVins.length - 10} รายการ` 
+          duplicateVins.length > 10
+            ? `${duplicateVins.slice(0, 10).join(', ')} และอีก ${duplicateVins.length - 10} รายการ`
             : duplicateVins.join(', ')
         }`;
       }
@@ -457,9 +585,10 @@ export class StockService {
         errors: errors.length > 0 ? errors : undefined,
         fileId: fileUpload.id,
         duplicateVinCount: duplicateVins.length,
-        message: duplicateVins.length > 0 
-          ? `นำเข้าข้อมูลสำเร็จ ${results.length} รายการ, ไม่สำเร็จ ${errors.length} รายการ${duplicateVinMessage}`
-          : `นำเข้าข้อมูลสำเร็จ ${results.length} รายการ, ไม่สำเร็จ ${errors.length} รายการ`
+        message:
+          duplicateVins.length > 0
+            ? `นำเข้าข้อมูลสำเร็จ ${results.length} รายการ, ไม่สำเร็จ ${errors.length} รายการ${duplicateVinMessage}`
+            : `นำเข้าข้อมูลสำเร็จ ${results.length} รายการ, ไม่สำเร็จ ${errors.length} รายการ`,
       };
     } catch (error) {
       // จัดการกับข้อผิดพลาดที่เกิดจากการตรวจสอบไฟล์ซ้ำ
@@ -467,7 +596,7 @@ export class StockService {
         throw error;
       }
       throw new BadRequestException(
-        `Failed to process Excel file: ${error.message}`
+        `Failed to process Excel file: ${error.message}`,
       );
     }
   }
@@ -477,21 +606,23 @@ export class StockService {
     fileId: number,
     recordsImported: number,
     importErrors?: string[],
-    isProcessed: boolean = false
+    isProcessed: boolean = false,
   ) {
     const fileUpload = await this.fileUploadRepository.findOne({
-      where: { id: fileId }
+      where: { id: fileId },
     });
 
     if (fileUpload) {
       fileUpload.recordsImported = recordsImported;
-      fileUpload.importErrors = importErrors ? JSON.stringify(importErrors) : null;
+      fileUpload.importErrors = importErrors
+        ? JSON.stringify(importErrors)
+        : null;
       fileUpload.isProcessed = isProcessed;
-      
+
       if (isProcessed) {
         fileUpload.processedAt = new Date();
       }
-      
+
       await this.fileUploadRepository.save(fileUpload);
     }
   }
@@ -501,11 +632,11 @@ export class StockService {
     const [uploads, total] = await this.fileUploadRepository.findAndCount({
       order: { uploadedAt: 'DESC' },
       skip: (page - 1) * limit,
-      take: limit
+      take: limit,
     });
 
     return {
-      data: uploads.map(upload => ({
+      data: uploads.map((upload) => ({
         id: upload.id,
         fileName: upload.fileName,
         fileSize: this.formatFileSize(upload.fileSize),
@@ -513,14 +644,14 @@ export class StockService {
         processedAt: upload.processedAt,
         status: upload.isProcessed ? 'ประมวลผลแล้ว' : 'รอการประมวลผล',
         recordsImported: upload.recordsImported,
-        hasErrors: upload.importErrors !== null
+        hasErrors: upload.importErrors !== null,
       })),
       meta: {
         total,
         page,
         limit,
-        totalPages: Math.ceil(total / limit)
-      }
+        totalPages: Math.ceil(total / limit),
+      },
     };
   }
 
@@ -534,7 +665,7 @@ export class StockService {
   // ฟังก์ชันดูรายละเอียดข้อผิดพลาดการอัพโหลด
   async getFileUploadErrors(fileId: number) {
     const fileUpload = await this.fileUploadRepository.findOne({
-      where: { id: fileId }
+      where: { id: fileId },
     });
 
     if (!fileUpload) {
@@ -546,7 +677,114 @@ export class StockService {
       uploadedAt: fileUpload.uploadedAt,
       processedAt: fileUpload.processedAt,
       recordsImported: fileUpload.recordsImported,
-      errors: fileUpload.importErrors ? JSON.parse(fileUpload.importErrors) : []
+      errors: fileUpload.importErrors
+        ? JSON.parse(fileUpload.importErrors)
+        : [],
     };
+  }
+
+  /**
+   * สรุปสต็อกรถแยกตามแบรนด์ (สำหรับ Admin)
+   */
+  async getStockSummaryByBrand() {
+    const [isuzuVehicles, bydVehicles] = await Promise.all([
+      this.vehicleRepository.find({ where: { brandId: 1 } }),
+      this.vehicleRepository.find({ where: { brandId: 2 } }),
+    ]);
+
+    const summarizeBrand = (vehicles: Vehicle[], brandId: number, brandCode: string, brandName: string) => {
+      const statusCounts = vehicles.reduce(
+        (acc, v) => {
+          acc[v.status] = (acc[v.status] || 0) + 1;
+          return acc;
+        },
+        {} as Record<string, number>,
+      );
+
+      const modelCounts = vehicles.reduce(
+        (acc, v) => {
+          acc[v.model] = (acc[v.model] || 0) + 1;
+          return acc;
+        },
+        {} as Record<string, number>,
+      );
+
+      return {
+        brandId,
+        brandCode,
+        brandName,
+        total: vehicles.length,
+        available: statusCounts[VehicleStatus.AVAILABLE] || 0,
+        unavailable: statusCounts[VehicleStatus.UNAVAILABLE] || 0,
+        inUse: statusCounts[VehicleStatus.IN_USE] || 0,
+        maintenance: statusCounts[VehicleStatus.MAINTENANCE] || 0,
+        lockedForEvent: statusCounts[VehicleStatus.LOCKED_FOR_EVENT] || 0,
+        byModel: modelCounts,
+      };
+    };
+
+    return {
+      isuzu: summarizeBrand(isuzuVehicles, 1, 'ISUZU', 'Isuzu'),
+      byd: summarizeBrand(bydVehicles, 2, 'BYD', 'BYD'),
+    };
+  }
+
+  /**
+   * วิเคราะห์สต็อกแยกตามแบรนด์ (สำหรับ Admin)
+   */
+  async getAnalyticsByBrand() {
+    const [isuzuVehicles, bydVehicles] = await Promise.all([
+      this.vehicleRepository.find({ where: { brandId: 1 } }),
+      this.vehicleRepository.find({ where: { brandId: 2 } }),
+    ]);
+
+    const analyzeBrand = (
+      vehicles: Vehicle[],
+      brandId: number,
+      brandCode: string,
+      brandName: string,
+    ) => {
+      const totalVehicles = vehicles.length;
+      const availableVehicles = vehicles.filter(
+        (v) => v.status === VehicleStatus.AVAILABLE,
+      ).length;
+      const inUseVehicles = vehicles.filter(
+        (v) => v.status === VehicleStatus.IN_USE,
+      ).length;
+      const utilizationRate =
+        totalVehicles > 0 ? (inUseVehicles / totalVehicles) * 100 : 0;
+
+      const prices = vehicles
+        .filter((v) => v.price && v.price > 0)
+        .map((v) => v.price);
+      const averagePrice =
+        prices.length > 0
+          ? prices.reduce((a, b) => a + b, 0) / prices.length
+          : 0;
+
+      const modelDistribution = vehicles.reduce(
+        (acc, v) => {
+          acc[v.model] = (acc[v.model] || 0) + 1;
+          return acc;
+        },
+        {} as Record<string, number>,
+      );
+
+      return {
+        brandId,
+        brandCode,
+        brandName,
+        totalVehicles,
+        availableVehicles,
+        utilizationRate: parseFloat(utilizationRate.toFixed(2)),
+        averagePrice: parseFloat(averagePrice.toFixed(2)),
+        modelDistribution,
+      };
+    };
+
+    return [
+      analyzeBrand(isuzuVehicles, 1, 'ISUZU', 'Isuzu'),
+      analyzeBrand(bydVehicles, 2, 'BYD', 'BYD'),
+    ];
   }
 }

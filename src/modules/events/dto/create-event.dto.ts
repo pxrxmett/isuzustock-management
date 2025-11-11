@@ -47,20 +47,20 @@ export class CreateEventDto {
   @IsString()
   endTime?: string;
 
-  @ApiPropertyOptional({ example: 'uuid-of-staff', description: 'ผู้สร้างงาน (Staff ID)' })
+  @ApiPropertyOptional({ example: 1, description: 'ผู้สร้างงาน (Staff ID)' })
   @IsOptional()
-  @IsUUID()
-  createdBy?: string;
+  @IsNumber()
+  createdBy?: number;
 
   @ApiPropertyOptional({
-    type: [String],
-    example: ['uuid-1', 'uuid-2'],
+    type: [Number],
+    example: [1, 2],
     description: 'รายชื่อพนักงานที่ได้รับมอบหมาย (Staff IDs)'
   })
   @IsOptional()
   @IsArray()
-  @IsString({ each: true })
-  assignedStaffIds?: string[];
+  @IsNumber({}, { each: true })
+  assignedStaffIds?: number[];
 
   @ApiPropertyOptional({ example: 'หมายเหตุเพิ่มเติม', description: 'หมายเหตุ' })
   @IsOptional()

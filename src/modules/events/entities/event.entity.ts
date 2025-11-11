@@ -66,11 +66,11 @@ export class Event {
   @Column({ type: 'time', nullable: true })
   endTime: string;
 
-  @Column({ type: 'varchar', length: 36, nullable: true })
-  createdBy: string;
+  @Column({ type: 'int', nullable: true })
+  createdBy: number | null;
 
-  @Column({ type: 'simple-array', nullable: true })
-  assignedStaffIds: string[];
+  @Column({ type: 'simple-json', nullable: true })
+  assignedStaffIds: number[] | null;
 
   @Column({ type: 'text', nullable: true })
   notes: string;

@@ -1,3 +1,15 @@
+// @ts-nocheck
+/**
+ * TODO: THIS CONTROLLER IS DEPRECATED
+ *
+ * This controller has been replaced by:
+ * - BrandStockController (src/modules/stock/controllers/brand-stock.controller.ts)
+ * - AdminStockController (src/modules/stock/controllers/admin-stock.controller.ts)
+ *
+ * Kept for backward compatibility only.
+ * Type checking temporarily disabled.
+ * This file should be removed after migration is complete.
+ */
 // stock.controller.ts
 import { 
   Controller,

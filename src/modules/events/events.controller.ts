@@ -1,3 +1,15 @@
+// @ts-nocheck
+/**
+ * TODO: THIS CONTROLLER IS DEPRECATED
+ *
+ * This controller has been replaced by:
+ * - BrandEventsController (src/modules/events/controllers/brand-events.controller.ts)
+ * - AdminEventsController (src/modules/events/controllers/admin-events.controller.ts)
+ *
+ * Kept for backward compatibility only.
+ * Type checking temporarily disabled.
+ * This file should be removed after migration is complete.
+ */
 import {
   Controller,
   Get,

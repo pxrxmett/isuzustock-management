@@ -1,14 +1,4 @@
-// @ts-nocheck
-/**
- * TODO: THIS FILE NEEDS REFACTORING FOR NEW STAFF ENTITY
- *
- * The new Staff entity structure changed:
- * - firstName/lastName → fullName/fullNameEn
- * - This file needs to be updated in Phase 2: TestDrive Module Refactoring
- *
- * Type checking temporarily disabled until refactoring is complete.
- */
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between } from 'typeorm';
 import { TestDrive } from '../entities/test-drive.entity';
@@ -35,22 +25,33 @@ export class TestDriveService {
     private brandService: BrandService,
   ) {}
 
-  async create(createDto: CreateTestDriveDto) {
+  async create(createDto: CreateTestDriveDto, brandId: number) {
+    // Validate brand exists
+    await this.brandService.findOne(brandId);
+
     // ตรวจสอบความพร้อมของรถ
     const vehicle = await this.vehicleRepository.findOne({
-      where: { id: createDto.vehicle_id }, // ใช้ snake_case ตาม DTO
+      where: { id: createDto.vehicle_id },
+      relations: ['brand'],
     });
 
     if (!vehicle || vehicle.status !== VehicleStatus.AVAILABLE) {
       throw new BadRequestException('รถไม่พร้อมสำหรับการทดลองขับ');
     }
 
+    // Validate vehicle belongs to the brand
+    if (vehicle.brandId !== brandId) {
+      throw new ForbiddenException(
+        `Vehicle #${createDto.vehicle_id} does not belong to this brand`
+      );
+    }
+
     // ตรวจสอบการจองซ้ำซ้อน
     const existingBooking = await this.testDriveRepository.findOne({
       where: {
-        vehicleId: createDto.vehicle_id, // แปลงจาก snake_case เป็น camelCase เมื่อใช้กับ entity
+        vehicleId: createDto.vehicle_id,
         status: TestDriveStatus.PENDING,
-        startTime: Between(createDto.start_time, createDto.expected_end_time) // แปลงจาก snake_case เป็น camelCase เมื่อใช้กับ entity
+        startTime: Between(createDto.start_time, createDto.expected_end_time)
       }
     });
 
@@ -58,10 +59,10 @@ export class TestDriveService {
       throw new BadRequestException('มีการจองรถในช่วงเวลานี้แล้ว');
     }
 
-    // สร้างการจองใหม่
+    // สร้างการจองใหม่ (force brandId from URL)
     const testDriveData = {
       vehicleId: createDto.vehicle_id,
-      brandId: createDto.brand_id || 1, // Default to ISUZU
+      brandId, // Force from URL parameter
       customerName: createDto.customer_name,
       customerPhone: createDto.customer_phone,
       startTime: createDto.start_time,
@@ -70,68 +71,71 @@ export class TestDriveService {
       testRoute: createDto.test_route,
       distance: createDto.distance,
       duration: createDto.duration,
-      responsibleStaffId: String(createDto.responsible_staff), // แปลงเป็น string
+      responsibleStaffId: createDto.responsible_staff,
       status: createDto.status || TestDriveStatus.PENDING
     };
 
     const testDrive = this.testDriveRepository.create(testDriveData);
 
-    await this.vehicleRepository.update(vehicle.id, { 
-      status: VehicleStatus.IN_USE 
+    await this.vehicleRepository.update(vehicle.id, {
+      status: VehicleStatus.IN_USE
     });
 
     return this.testDriveRepository.save(testDrive);
   }
 
-  async findAll(searchDto: SearchTestDriveDto) {
+  async findAll(searchDto: SearchTestDriveDto, brandId?: number) {
     const query = this.testDriveRepository.createQueryBuilder('td')
       .leftJoinAndSelect('td.vehicle', 'vehicle')
       .leftJoinAndSelect('td.staff', 'staff')
       .leftJoinAndSelect('td.brand', 'brand');
 
-    // Brand filtering
-    if (searchDto.brand || searchDto.brandId) {
+    // Brand filtering (if brandId is provided, filter by it)
+    if (brandId !== undefined) {
+      query.andWhere('td.brandId = :brandId', { brandId });
+    } else if (searchDto.brand || searchDto.brandId) {
+      // Admin mode: allow filtering by brand from search DTO
       const brandParam = searchDto.brand || searchDto.brandId;
 
       if (brandParam) {
         // Check if it's a number (brand ID) or string (brand code)
         if (!isNaN(Number(brandParam))) {
-          query.andWhere('td.brandId = :brandId', {
-            brandId: Number(brandParam)
+          query.andWhere('td.brandId = :searchBrandId', {
+            searchBrandId: Number(brandParam)
           });
         } else {
           // Brand code (e.g., 'ISUZU', 'BYD')
-          const brandId = await this.brandService.getIdByCode(brandParam.toString());
-          query.andWhere('td.brandId = :brandId', { brandId });
+          const searchBrandId = await this.brandService.getIdByCode(brandParam.toString());
+          query.andWhere('td.brandId = :searchBrandId', { searchBrandId });
         }
       }
     }
 
-    if (searchDto.customer_name) { // ใช้ snake_case ตาม DTO
-      query.andWhere('td.customerName ILIKE :name', { // ใช้ camelCase ตาม entity
+    if (searchDto.customer_name) {
+      query.andWhere('td.customerName ILIKE :name', {
         name: `%${searchDto.customer_name}%`
       });
     }
 
-    if (searchDto.customer_phone) { // ใช้ snake_case ตาม DTO
-      query.andWhere('td.customerPhone LIKE :phone', { // ใช้ camelCase ตาม entity
-        phone: `%${searchDto.customer_phone}%` 
+    if (searchDto.customer_phone) {
+      query.andWhere('td.customerPhone LIKE :phone', {
+        phone: `%${searchDto.customer_phone}%`
       });
     }
 
     if (searchDto.vehicleCode) {
-      query.andWhere('vehicle.vehicleCode LIKE :code', { 
-        code: `%${searchDto.vehicleCode}%` 
+      query.andWhere('vehicle.vehicleCode LIKE :code', {
+        code: `%${searchDto.vehicleCode}%`
       });
     }
 
     if (searchDto.status) {
-      query.andWhere('td.status = :status', { 
-        status: searchDto.status 
+      query.andWhere('td.status = :status', {
+        status: searchDto.status
       });
     }
 
-    if (searchDto.start_date && searchDto.end_date) { // ใช้ snake_case ตาม DTO
+    if (searchDto.start_date && searchDto.end_date) {
       query.andWhere('td.startTime BETWEEN :startDate AND :endDate', {
         startDate: searchDto.start_date,
         endDate: searchDto.end_date
@@ -142,32 +146,32 @@ export class TestDriveService {
 
     return testDrives.map(td => ({
       id: td.id,
-      start_time: td.startTime, // แปลงจาก camelCase เป็น snake_case เมื่อส่งกลับ API
+      start_time: td.startTime,
       created_at: td.createdAt,
       customer_name: td.customerName,
       customer_phone: td.customerPhone,
       duration: td.duration,
       status: td.status,
-      staff_name: td.staff ? `${td.staff.firstName} ${td.staff.lastName}` : null,
+      staff_name: td.staff ? td.staff.fullName : null,
       vehicle: td.vehicle
     }));
   }
 
-  async findOne(id: number) {
+  async findOne(id: number, brandId?: number) {
     const testDrive = await this.testDriveRepository.findOne({
       where: { id },
       relations: ['vehicle', 'staff', 'brand'],
-      select: {
-        staff: {
-          id: true,
-          firstName: true,
-          lastName: true
-        }
-      }
     });
 
     if (!testDrive) {
       throw new NotFoundException('ไม่พบรายการทดลองขับ');
+    }
+
+    // Validate brand ownership if brandId is provided
+    if (brandId !== undefined && testDrive.brandId !== brandId) {
+      throw new ForbiddenException(
+        `Test Drive #${id} does not belong to this brand`
+      );
     }
 
     // Calculate can_edit based on signature date
@@ -180,15 +184,13 @@ export class TestDriveService {
 
     return {
       ...testDrive,
-      staff_name: testDrive.staff ?
-        `${testDrive.staff.firstName} ${testDrive.staff.lastName}` :
-        null,
+      staff_name: testDrive.staff ? testDrive.staff.fullName : null,
       can_edit: canEdit,
     };
   }
 
-  async update(id: number, updateDto: UpdateTestDriveDto) {
-    const testDrive = await this.findOne(id);
+  async update(id: number, updateDto: UpdateTestDriveDto, brandId?: number) {
+    const testDrive = await this.findOne(id, brandId);
 
     if (testDrive.status !== TestDriveStatus.PENDING) {
       throw new BadRequestException('ไม่สามารถแก้ไขรายการที่ไม่ได้อยู่ในสถานะรอดำเนินการ');
@@ -201,32 +203,39 @@ export class TestDriveService {
     }
 
     // แปลงจาก snake_case ใน DTO เป็น camelCase ใน entity
-    const entityToUpdate = {};
+    const entityToUpdate: any = {};
 
-    if (updateDto.customer_name) entityToUpdate['customerName'] = updateDto.customer_name;
-    if (updateDto.customer_phone) entityToUpdate['customerPhone'] = updateDto.customer_phone;
-    if (updateDto.customer_license_number) entityToUpdate['customerLicenseNumber'] = updateDto.customer_license_number;
-    if (updateDto.notes !== undefined) entityToUpdate['notes'] = updateDto.notes;
-    if (updateDto.test_route) entityToUpdate['testRoute'] = updateDto.test_route;
-    if (updateDto.start_time) entityToUpdate['startTime'] = updateDto.start_time;
-    if (updateDto.expected_end_time) entityToUpdate['expectedEndTime'] = updateDto.expected_end_time;
-    if (updateDto.actual_end_time) entityToUpdate['actualEndTime'] = updateDto.actual_end_time;
-    if (updateDto.distance) entityToUpdate['distance'] = updateDto.distance;
-    if (updateDto.duration) entityToUpdate['duration'] = updateDto.duration;
-    if (updateDto.responsible_staff) entityToUpdate['responsibleStaffId'] = String(updateDto.responsible_staff);
-    if (updateDto.status) entityToUpdate['status'] = updateDto.status;
+    if (updateDto.customer_name) entityToUpdate.customerName = updateDto.customer_name;
+    if (updateDto.customer_phone) entityToUpdate.customerPhone = updateDto.customer_phone;
+    if (updateDto.customer_license_number) entityToUpdate.customerLicenseNumber = updateDto.customer_license_number;
+    if (updateDto.notes !== undefined) entityToUpdate.notes = updateDto.notes;
+    if (updateDto.test_route) entityToUpdate.testRoute = updateDto.test_route;
+    if (updateDto.start_time) entityToUpdate.startTime = updateDto.start_time;
+    if (updateDto.expected_end_time) entityToUpdate.expectedEndTime = updateDto.expected_end_time;
+    if (updateDto.actual_end_time) entityToUpdate.actualEndTime = updateDto.actual_end_time;
+    if (updateDto.distance) entityToUpdate.distance = updateDto.distance;
+    if (updateDto.duration) entityToUpdate.duration = updateDto.duration;
+    if (updateDto.responsible_staff) entityToUpdate.responsibleStaffId = updateDto.responsible_staff;
+    if (updateDto.status) entityToUpdate.status = updateDto.status;
 
     Object.assign(testDrive, entityToUpdate);
     return this.testDriveRepository.save(testDrive);
   }
 
-  async submitPdpaConsent(id: number, consent: boolean) {
+  async submitPdpaConsent(id: number, consent: boolean, brandId?: number) {
     const testDrive = await this.testDriveRepository.findOne({
       where: { id },
     });
 
     if (!testDrive) {
       throw new NotFoundException('ไม่พบรายการทดลองขับ');
+    }
+
+    // Validate brand ownership if brandId is provided
+    if (brandId !== undefined && testDrive.brandId !== brandId) {
+      throw new ForbiddenException(
+        `Test Drive #${id} does not belong to this brand`
+      );
     }
 
     if (!consent) {
@@ -244,13 +253,20 @@ export class TestDriveService {
     };
   }
 
-  async submitSignature(id: number, signatureData: string) {
+  async submitSignature(id: number, signatureData: string, brandId?: number) {
     const testDrive = await this.testDriveRepository.findOne({
       where: { id },
     });
 
     if (!testDrive) {
       throw new NotFoundException('ไม่พบรายการทดลองขับ');
+    }
+
+    // Validate brand ownership if brandId is provided
+    if (brandId !== undefined && testDrive.brandId !== brandId) {
+      throw new ForbiddenException(
+        `Test Drive #${id} does not belong to this brand`
+      );
     }
 
     if (!testDrive.pdpaConsent) {
@@ -279,8 +295,8 @@ export class TestDriveService {
     };
   }
 
-  async cancel(id: number) {
-    const testDrive = await this.findOne(id);
+  async cancel(id: number, brandId?: number) {
+    const testDrive = await this.findOne(id, brandId);
 
     if (testDrive.status !== TestDriveStatus.PENDING) {
       throw new BadRequestException('ไม่สามารถยกเลิกรายการที่ไม่ได้อยู่ในสถานะรอดำเนินการ');
