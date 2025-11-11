@@ -79,16 +79,14 @@ export class AuthService {
       throw new UnauthorizedException('รหัสผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
     }
 
-    // 6. อัปเดต lastLoginAt
+    // 6. อัปเดต lastLoginAt (User only)
+    // NOTE: Staff login is LINE-only, handled by line-auth.service.ts
     if (accountType === 'user') {
       await this.userRepository.update(user.id, {
         lastLoginAt: new Date(),
       });
-    } else {
-      await this.staffRepository.update(user.id, {
-        lineLastLoginAt: new Date(),
-      });
     }
+    // Staff lastLoginAt is tracked separately in LineUser table
 
     // 7. สร้าง JWT payload
     const payload = {

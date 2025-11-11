@@ -75,11 +75,11 @@ export class StaffService {
 
     const saved = await this.staffRepository.save(staff);
 
-    // Load brand relation
-    return await this.staffRepository.findOne({
+    // Load brand relation (non-null assertion safe as we just saved it)
+    return (await this.staffRepository.findOne({
       where: { id: saved.id },
       relations: ['brand'],
-    });
+    }))!;
   }
 
   /**
@@ -194,11 +194,11 @@ export class StaffService {
 
     const updated = await this.staffRepository.save(staff);
 
-    // Load relations
-    return await this.staffRepository.findOne({
+    // Load relations (non-null assertion safe as we just saved it)
+    return (await this.staffRepository.findOne({
       where: { id: updated.id },
       relations: ['brand'],
-    });
+    }))!;
   }
 
   /**

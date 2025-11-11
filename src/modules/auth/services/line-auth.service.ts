@@ -3,8 +3,8 @@ import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Staff } from '../../staff/entities/staff.entity';
-import { LineProfile } from '../entities/line-profile.entity'; // เพิ่มการนำเข้า Entity
-import { LineUser } from '../../line-integration/entities/line-user.entity'; // เพิ่มการนำเข้า Entity
+import { LineProfile } from '../entities/line-profile.entity';
+import { LineUser } from '../../line-integration/entities/line-user.entity';
 import { LineLoginDto } from '../dto/line-login.dto';
 import { AuthResponse } from '../interfaces/auth-response.interface';
 import axios from 'axios';
@@ -16,9 +16,9 @@ export class LineAuthService {
   constructor(
     @InjectRepository(Staff)
     private staffRepository: Repository<Staff>,
-    @InjectRepository(LineProfile) // เพิ่ม Repository
+    @InjectRepository(LineProfile)
     private lineProfileRepository: Repository<LineProfile>,
-    @InjectRepository(LineUser) // เพิ่ม Repository
+    @InjectRepository(LineUser)
     private lineUserRepository: Repository<LineUser>,
     private jwtService: JwtService,
   ) {}
@@ -44,7 +44,7 @@ export class LineAuthService {
       // เพิ่ม: บันทึกหรืออัปเดตข้อมูลใน line_users (ไม่ว่าจะเชื่อมโยงหรือไม่)
       // ตรวจสอบว่ามี line_users record หรือไม่
       let lineUser = await this.lineUserRepository.findOne({
-        where: { lineUserId: lineProfile.userId }
+        where: { lineUserId: lineProfile.userId },
       });
 
       if (!lineUser) {
@@ -62,10 +62,14 @@ export class LineAuthService {
         this.logger.log(`สร้าง LINE User ใหม่: ${lineProfile.userId}`);
       }
 
-      // ค้นหาพนักงานที่เชื่อมโยงกับ LINE User ID
-      const staff = await this.staffRepository.findOne({
-        where: { lineUserId: lineProfile.userId },
-      });
+      // ค้นหาพนักงานที่เชื่อมโยงกับ LINE User ID (ใช้ LineUser table)
+      let staff: Staff | null = null;
+      if (lineUser.staffId) {
+        staff = await this.staffRepository.findOne({
+          where: { id: lineUser.staffId },
+          relations: ['brand'], // Include brand relation
+        });
+      }
 
       // ตรวจสอบว่ามีการเชื่อมโยงกับพนักงานหรือไม่
       if (!staff) {
@@ -97,9 +101,10 @@ export class LineAuthService {
       // สร้าง payload สำหรับ JWT token
       const payload = {
         sub: staff.id,
-        staffCode: staff.staffCode, // แก้ไขจาก staff_code เป็น staffCode
-        role: staff.role || 'staff',
-        department: staff.department,
+        employeeCode: staff.employeeCode,
+        role: staff.role,
+        brandId: staff.brandId,
+        brandCode: staff.brand?.code,
         iat: Math.floor(Date.now() / 1000),
       };
 
@@ -108,22 +113,25 @@ export class LineAuthService {
         expiresIn: '1d', // token หมดอายุใน 1 วัน
       });
 
-      // อัปเดตข้อมูล LINE profile หากมีการเปลี่ยนแปลง
-      await this.updateLineProfile(staff, lineProfile);
+      // อัปเดต lastLoginAt ใน LineProfile
+      await this.updateLineProfileLastLogin(lineProfile.userId);
 
-      this.logger.log(`ผู้ใช้ ${staff.staffCode} เข้าสู่ระบบสำเร็จผ่าน LINE`); // แก้ไขจาก staff_code เป็น staffCode
+      this.logger.log(`ผู้ใช้ ${staff.employeeCode} เข้าสู่ระบบสำเร็จผ่าน LINE`);
 
       // ส่งข้อมูลการเข้าสู่ระบบกลับไป
       return {
         token,
         user: {
           id: staff.id,
-          staffCode: staff.staffCode, // แก้ไขจาก staff_code เป็น staffCode
-          firstName: staff.firstName, // แก้ไขจาก first_name เป็น firstName
-          lastName: staff.lastName, // แก้ไขจาก last_name เป็น lastName
-          position: staff.position,
-          department: staff.department,
-          role: staff.role || 'staff',
+          employeeCode: staff.employeeCode,
+          fullName: staff.fullName,
+          fullNameEn: staff.fullNameEn,
+          brandId: staff.brandId,
+          brandCode: staff.brand?.code,
+          email: staff.email,
+          phone: staff.phone,
+          role: staff.role,
+          status: staff.status,
           lineProfile: {
             userId: lineProfile.userId,
             displayName: lineProfile.displayName,
@@ -133,12 +141,12 @@ export class LineAuthService {
       };
     } catch (error) {
       this.logger.error(`การเข้าสู่ระบบผ่าน LINE ล้มเหลว: ${error.message}`, error.stack);
-      
+
       // ส่งข้อความ error ที่เหมาะสมกลับไป
       if (error instanceof HttpException) {
         throw error;
       }
-      
+
       throw new HttpException(
         'เกิดข้อผิดพลาดในการเข้าสู่ระบบผ่าน LINE',
         HttpStatus.INTERNAL_SERVER_ERROR,
@@ -154,7 +162,7 @@ export class LineAuthService {
     try {
       // ค้นหา LINE Profile ที่มีอยู่
       let profile = await this.lineProfileRepository.findOne({
-        where: { lineUserId: lineProfileData.userId }
+        where: { lineUserId: lineProfileData.userId },
       });
 
       if (!profile) {
@@ -181,14 +189,14 @@ export class LineAuthService {
   /**
    * บันทึกหรืออัปเดตข้อมูล LINE User
    * @param lineUserId LINE User ID จาก LINE API
-   * @param staffId ID ของพนักงานที่เชื่อมโยง
+   * @param staffId ID ของพนักงานที่เชื่อมโยง (number type)
    * @param accessToken LINE Access Token
    */
-  private async saveOrUpdateLineUser(lineUserId: string, staffId: string, accessToken: string) {
+  private async saveOrUpdateLineUser(lineUserId: string, staffId: number, accessToken: string) {
     try {
       // ค้นหา LINE User ที่มีอยู่
       let lineUser = await this.lineUserRepository.findOne({
-        where: { lineUserId }
+        where: { lineUserId },
       });
 
       if (!lineUser) {
@@ -225,11 +233,11 @@ export class LineAuthService {
         headers: { Authorization: `Bearer ${accessToken}` },
         timeout: 5000, // กำหนด timeout 5 วินาที
       });
-      
+
       return response.data;
     } catch (error) {
       this.logger.error(`การตรวจสอบ LINE token ล้มเหลว: ${error.message}`);
-      
+
       // ระบุข้อผิดพลาดที่ชัดเจนตามสาเหตุ
       if (error.response) {
         // มีการตอบกลับจาก LINE API แต่เป็น error
@@ -244,7 +252,7 @@ export class LineAuthService {
           HttpStatus.SERVICE_UNAVAILABLE,
         );
       }
-      
+
       throw new HttpException(
         'เกิดข้อผิดพลาดในการตรวจสอบ LINE Token',
         HttpStatus.INTERNAL_SERVER_ERROR,
@@ -253,31 +261,18 @@ export class LineAuthService {
   }
 
   /**
-   * อัปเดตข้อมูล LINE Profile หากมีการเปลี่ยนแปลง
-   * @param staff ข้อมูลพนักงานที่เชื่อมโยงกับ LINE
-   * @param newProfile ข้อมูล LINE Profile ใหม่
+   * อัปเดตเวลาเข้าสู่ระบบล่าสุดใน LINE Profile
+   * @param lineUserId LINE User ID
    */
-  private async updateLineProfile(staff: Staff, newProfile: any) {
+  private async updateLineProfileLastLogin(lineUserId: string) {
     try {
-      const needsUpdate = 
-        staff.lineDisplayName !== newProfile.displayName ||
-        staff.linePictureUrl !== newProfile.pictureUrl;
-
-      if (needsUpdate) {
-        // อัปเดตข้อมูลที่มีการเปลี่ยนแปลง
-        staff.lineDisplayName = newProfile.displayName;
-        staff.linePictureUrl = newProfile.pictureUrl;
-        staff.lineLastLoginAt = new Date();
-        
-        await this.staffRepository.save(staff);
-        this.logger.log(`อัปเดตข้อมูล LINE Profile สำหรับ staffId: ${staff.id}`);
-      } else {
-        // อัปเดตเฉพาะเวลาเข้าสู่ระบบล่าสุด
-        staff.lineLastLoginAt = new Date();
-        await this.staffRepository.save(staff);
-      }
+      await this.lineProfileRepository.update(
+        { lineUserId },
+        { lastLoginAt: new Date() },
+      );
+      this.logger.log(`อัปเดตเวลาเข้าสู่ระบบล่าสุดสำหรับ LINE User: ${lineUserId}`);
     } catch (error) {
-      this.logger.error(`การอัปเดตข้อมูล LINE Profile ล้มเหลว: ${error.message}`);
+      this.logger.error(`การอัปเดตเวลาเข้าสู่ระบบล้มเหลว: ${error.message}`);
       // เราไม่ throw error ที่นี่เพื่อไม่ให้กระทบต่อการเข้าสู่ระบบ
     }
   }

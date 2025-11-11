@@ -40,17 +40,17 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       where: { id: userId },
       select: [
         'id',
-        'staffCode',
-        'firstName',
-        'lastName',
+        'employeeCode',
+        'fullName',
+        'fullNameEn',
+        'brandId',
         'role',
         'status',
-        'lineUserId',
-        'department',
-        'position',
         'email',
         'phone',
+        'avatar',
       ],
+      relations: ['brand'], // Include brand relation to get brand code
     });
 
     if (!staff) {
@@ -59,25 +59,25 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     }
 
     if (staff.status !== 'active') {
-      console.error('❌ Staff inactive:', staff.staffCode);
+      console.error('❌ Staff inactive:', staff.employeeCode);
       throw new UnauthorizedException('User is inactive');
     }
 
-    console.log('✅ Staff validated:', staff.staffCode);
+    console.log('✅ Staff validated:', staff.employeeCode);
 
     // Return staff object that will be available as req.user
     return {
       id: staff.id,
-      staffCode: staff.staffCode,
-      firstName: staff.firstName,
-      lastName: staff.lastName,
+      employeeCode: staff.employeeCode,
+      fullName: staff.fullName,
+      fullNameEn: staff.fullNameEn,
+      brandId: staff.brandId,
+      brandCode: staff.brand?.code, // Get brand code from relation
       role: staff.role,
-      department: staff.department,
-      position: staff.position,
-      lineUserId: staff.lineUserId,
+      status: staff.status,
       email: staff.email,
       phone: staff.phone,
-      status: staff.status,
+      avatar: staff.avatar,
     };
   }
 }
