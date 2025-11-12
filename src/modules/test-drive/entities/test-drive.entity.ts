@@ -40,13 +40,13 @@ export class TestDrive {
   @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
   distance: number;
 
-  @Column()
+  @Column({ nullable: true })
   duration: number;
 
-  @Column({ name: 'start_time' })
+  @Column({ name: 'start_time', nullable: true })
   startTime: Date;
 
-  @Column({ name: 'expected_end_time' })
+  @Column({ name: 'expected_end_time', nullable: true })
   expectedEndTime: Date;
 
   @Column({ name: 'actual_end_time', nullable: true })
