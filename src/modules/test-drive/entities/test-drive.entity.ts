@@ -67,7 +67,7 @@ export class TestDrive {
   @Column({ name: 'actual_end_time', nullable: true })
   actualEndTime: Date;
 
-  @Column({ name: 'responsible_staff', type: 'int' })
+  @Column({ name: 'responsible_staff', type: 'int', nullable: true })
   responsibleStaffId: number;
 
   @ManyToOne(() => Staff, { eager: false })
