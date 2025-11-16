@@ -18,7 +18,7 @@ export default registerAs(
       charset: 'utf8mb4',
       timezone: '+07:00',
       connectTimeout: 60000,
-      acquireTimeout: 60000,
+      // Note: acquireTimeout removed - not supported by MySQL2 driver
       extra: {
         connectionLimit: 10,
       },
