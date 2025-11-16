@@ -24,6 +24,7 @@
   "migration:run": "npm run typeorm migration:run -- -d src/database/data-source.ts",
   "migration:revert": "npm run typeorm migration:revert -- -d src/database/data-source.ts",
   "migration:show": "npm run typeorm migration:show -- -d src/database/data-source.ts",
+  "create:admin": "ts-node scripts/create-admin.ts",
   "docker:build": "docker build -t stock-management-api .",
   "docker:build:prod": "docker build --target production -t stock-management-api:prod .",
   "docker:run": "docker run -p 3000:3000 --env-file .env stock-management-api",
