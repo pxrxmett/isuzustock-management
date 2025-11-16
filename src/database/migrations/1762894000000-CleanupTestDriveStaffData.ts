@@ -11,6 +11,14 @@ export class CleanupTestDriveStaffData1762894000000 implements MigrationInterfac
     );
 
     if (hasResponsibleStaff) {
+      // ✅ CRITICAL FIX: Make column nullable FIRST before any UPDATE
+      console.log('🔧 Making responsible_staff column nullable...');
+      await queryRunner.query(`
+        ALTER TABLE test_drives
+        MODIFY COLUMN responsible_staff INT NULL
+      `);
+      console.log('✅ Column is now nullable');
+
       // Step 2: Find all test_drives with invalid responsible_staff references
       const invalidRecords = await queryRunner.query(`
         SELECT td.id, td.responsible_staff
