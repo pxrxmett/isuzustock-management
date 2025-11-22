@@ -27,7 +27,10 @@ async function bootstrap() {
   const isProduction = nodeEnv === 'production';
 
   // Run database migrations automatically in production
-  if (isProduction) {
+  // ✅ เพิ่มการตรวจสอบ RUN_MIGRATIONS environment variable
+  const shouldRunMigrations = process.env.RUN_MIGRATIONS !== 'false';
+
+  if (isProduction && shouldRunMigrations) {
     try {
       console.log('🔄 Running database migrations...');
       const dataSource = app.get(DataSource);
@@ -35,8 +38,12 @@ async function bootstrap() {
       console.log('✅ Database migrations completed successfully');
     } catch (error) {
       console.error('❌ Migration failed:', error);
+      console.error('Error details:', error.message);
       // Continue anyway - migrations might already be applied
+      console.log('⚠️  Continuing server startup despite migration error...');
     }
+  } else if (isProduction && !shouldRunMigrations) {
+    console.log('⏭️  Skipping migrations (RUN_MIGRATIONS=false)');
   }
 
   // CRITICAL: Add raw HTTP handler for Railway health check at root
