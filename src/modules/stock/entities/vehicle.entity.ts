@@ -20,7 +20,7 @@ export enum VehicleStatus {
   LOCKED_FOR_EVENT = 'locked_for_event',
 }
 
-@Entity('vehicles')  // ✅ ต้องเป็น plural ตามชื่อตารางจริง
+@Entity('vehicle')  // ✅ ต้องเป็น singular ตามตารางจริง (ไม่มี s)
 export class Vehicle {
   @PrimaryGeneratedColumn()
   id: number;
