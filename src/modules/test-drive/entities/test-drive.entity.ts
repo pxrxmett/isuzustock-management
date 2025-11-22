@@ -11,6 +11,14 @@ import { Staff } from '../../staff/entities/staff.entity';
 import { Vehicle } from '../../stock/entities/vehicle.entity';
 import { Brand } from '../../brand/entities/brand.entity';
 
+// ✅ Enum ที่ตรงกับ database (uppercase)
+export enum TestDriveStatus {
+  PENDING = 'PENDING',
+  ONGOING = 'ONGOING',
+  COMPLETED = 'COMPLETED',
+  CANCELLED = 'CANCELLED',
+}
+
 @Entity('test_drives')
 export class TestDrive {
   @PrimaryGeneratedColumn()
@@ -32,10 +40,10 @@ export class TestDrive {
 
   @Column({
     type: 'enum',
-    enum: ['pending', 'ongoing', 'completed', 'cancelled'],
-    default: 'pending',
+    enum: TestDriveStatus,
+    default: TestDriveStatus.PENDING,
   })
-  status: string;
+  status: TestDriveStatus;
 
   @Column({ name: 'customer_name' })
   customerName: string;
@@ -86,9 +94,10 @@ export class TestDrive {
   @Column({ name: 'signed_at', type: 'timestamp', nullable: true })
   signedAt: Date;
 
-  @CreateDateColumn({ name: 'created_at' })
+  // Timestamps - database uses snake_case (created_at, updated_at) with datetime(6)
+  @CreateDateColumn({ type: 'datetime', precision: 6, name: 'created_at' })
   createdAt: Date;
 
-  @UpdateDateColumn({ name: 'updated_at' })
+  @UpdateDateColumn({ type: 'datetime', precision: 6, name: 'updated_at' })
   updatedAt: Date;
 }

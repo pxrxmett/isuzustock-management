@@ -51,6 +51,23 @@ export class Staff {
   })
   employeeCode: string;
 
+  // ✅ เพิ่ม first_name และ last_name สำหรับ compatibility กับ frontend
+  @Column({
+    name: 'first_name',
+    type: 'varchar',
+    length: 50,
+    nullable: true,
+  })
+  firstName: string | null;
+
+  @Column({
+    name: 'last_name',
+    type: 'varchar',
+    length: 50,
+    nullable: true,
+  })
+  lastName: string | null;
+
   @Column({
     name: 'full_name',
     type: 'varchar',

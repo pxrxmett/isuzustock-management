@@ -1,5 +1,14 @@
 // src/modules/stock/entities/vehicle.entity.ts
-import { Entity, Column, PrimaryGeneratedColumn, OneToMany, ManyToOne, JoinColumn } from 'typeorm';
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+  OneToMany,
+  ManyToOne,
+  JoinColumn
+} from 'typeorm';
 import { TestDrive } from '../../test-drive/entities/test-drive.entity';
 import { Brand } from '../../brand/entities/brand.entity';
 
@@ -11,7 +20,7 @@ export enum VehicleStatus {
   LOCKED_FOR_EVENT = 'locked_for_event',
 }
 
-@Entity()
+@Entity('vehicle')
 export class Vehicle {
   @PrimaryGeneratedColumn()
   id: number;
@@ -81,9 +90,10 @@ export class Vehicle {
   @Column({ type: 'datetime', nullable: true })
   eventLockEndDate: Date;
 
-  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
+  // Timestamps - database uses camelCase (createdAt, updatedAt)
+  @CreateDateColumn({ type: 'timestamp', name: 'createdAt' })
   createdAt: Date;
 
-  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP', onUpdate: 'CURRENT_TIMESTAMP' })
+  @UpdateDateColumn({ type: 'timestamp', name: 'updatedAt' })
   updatedAt: Date;
 }
