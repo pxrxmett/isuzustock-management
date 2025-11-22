@@ -12,6 +12,8 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { validateEnvironment } from './config/env.validation';
 import { DataSource } from 'typeorm';
+import * as express from 'express';
+import * as path from 'path';
 
 async function bootstrap() {
   // Validate environment variables BEFORE creating app
@@ -103,6 +105,9 @@ async function bootstrap() {
   });
 
   app.setGlobalPrefix('api');
+
+  // Serve static files from public directory (for uploaded files)
+  app.use('/uploads', express.static(path.join(process.cwd(), 'public', 'uploads')));
 
   app.useGlobalPipes(new ValidationPipe({
     whitelist: true,
