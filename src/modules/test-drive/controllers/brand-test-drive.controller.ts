@@ -8,7 +8,9 @@ import {
   Delete,
   UseGuards,
   Query,
-  ParseIntPipe
+  ParseIntPipe,
+  Res,
+  HttpStatus,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -16,14 +18,19 @@ import {
   ApiResponse,
   ApiBearerAuth,
   ApiBody,
-  ApiParam
+  ApiParam,
 } from '@nestjs/swagger';
+import { Response } from 'express';
 import { TestDriveService } from '../services/test-drive.service';
+import { TestDriveDocumentService } from '../services/test-drive-document.service';
 import { CreateTestDriveDto } from '../dto/create-test-drive.dto';
 import { UpdateTestDriveDto } from '../dto/update-test-drive.dto';
 import { SearchTestDriveDto } from '../dto/search-test-drive.dto';
 import { PdpaConsentDto } from '../dto/pdpa-consent.dto';
 import { SubmitSignatureDto } from '../dto/submit-signature.dto';
+import { CreateTestDriveDocumentDto } from '../dto/create-test-drive-document.dto';
+import { UpdateTestDriveDocumentDto } from '../dto/update-test-drive-document.dto';
+import { TestDriveDocumentResponseDto } from '../dto/test-drive-document-response.dto';
 import { BrandValidationGuard } from '../../../common/guards/brand-validation.guard';
 import { Brand as BrandDecorator } from '../../../common/decorators/brand.decorator';
 import { Brand } from '../../brand/entities/brand.entity';
@@ -40,7 +47,10 @@ import { Brand } from '../../brand/entities/brand.entity';
 @Controller(':brandCode/test-drives')
 @UseGuards(BrandValidationGuard)
 export class BrandTestDriveController {
-  constructor(private readonly testDriveService: TestDriveService) {}
+  constructor(
+    private readonly testDriveService: TestDriveService,
+    private readonly documentService: TestDriveDocumentService,
+  ) {}
 
   @Post()
   @ApiOperation({ summary: 'สร้างการจองทดลองขับใหม่' })
@@ -156,5 +166,143 @@ export class BrandTestDriveController {
     @Param('id', ParseIntPipe) id: number
   ) {
     return await this.testDriveService.cancel(id, brand.id);
+  }
+
+  // ==================== Test Drive Document Endpoints ====================
+
+  @Post(':id/document')
+  @ApiOperation({
+    summary: 'สร้างเอกสารการทดลองขับ',
+    description:
+      'สร้างเอกสารการทดลองขับพร้อมรูปภาพและลายเซ็น จากนั้นสร้าง PDF เอกสารฉบับสมบูรณ์',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'สร้างเอกสารสำเร็จ',
+    type: TestDriveDocumentResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'เอกสารมีอยู่แล้วหรือข้อมูลไม่ถูกต้อง',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'ข้อมูลไม่ได้เป็นของแบรนด์นี้',
+  })
+  @ApiResponse({ status: 404, description: 'ไม่พบรายการทดลองขับ' })
+  @ApiParam({ name: 'brandCode', description: 'Brand code (isuzu or byd)' })
+  @ApiParam({ name: 'id', description: 'Test Drive ID' })
+  @ApiBody({ type: CreateTestDriveDocumentDto })
+  async createDocument(
+    @BrandDecorator() brand: Brand,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() createDocumentDto: CreateTestDriveDocumentDto,
+  ) {
+    return await this.documentService.create(
+      id,
+      brand.id,
+      brand.code,
+      createDocumentDto,
+    );
+  }
+
+  @Patch(':id/document')
+  @ApiOperation({
+    summary: 'อัปเดตเอกสารการทดลองขับ',
+    description:
+      'แก้ไขข้อมูลเอกสารและสร้าง PDF ใหม่ รองรับการอัปเดตรูปภาพและลายเซ็น',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'อัปเดตเอกสารสำเร็จ',
+    type: TestDriveDocumentResponseDto,
+  })
+  @ApiResponse({ status: 400, description: 'ข้อมูลไม่ถูกต้อง' })
+  @ApiResponse({
+    status: 403,
+    description: 'ข้อมูลไม่ได้เป็นของแบรนด์นี้',
+  })
+  @ApiResponse({ status: 404, description: 'ไม่พบเอกสาร' })
+  @ApiParam({ name: 'brandCode', description: 'Brand code (isuzu or byd)' })
+  @ApiParam({ name: 'id', description: 'Test Drive ID' })
+  @ApiBody({ type: UpdateTestDriveDocumentDto })
+  async updateDocument(
+    @BrandDecorator() brand: Brand,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() updateDocumentDto: UpdateTestDriveDocumentDto,
+  ) {
+    return await this.documentService.update(
+      id,
+      brand.id,
+      brand.code,
+      updateDocumentDto,
+    );
+  }
+
+  @Get(':id/document')
+  @ApiOperation({
+    summary: 'ดึงข้อมูลเอกสารการทดลองขับ',
+    description: 'ดูข้อมูลเอกสารพร้อม URL ของ PDF และรูปภาพทั้งหมด',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'พบข้อมูลเอกสาร',
+    type: TestDriveDocumentResponseDto,
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'ข้อมูลไม่ได้เป็นของแบรนด์นี้',
+  })
+  @ApiResponse({ status: 404, description: 'ไม่พบเอกสาร' })
+  @ApiParam({ name: 'brandCode', description: 'Brand code (isuzu or byd)' })
+  @ApiParam({ name: 'id', description: 'Test Drive ID' })
+  async getDocument(
+    @BrandDecorator() brand: Brand,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return await this.documentService.findOne(id, brand.id);
+  }
+
+  @Get(':id/document/download')
+  @ApiOperation({
+    summary: 'ดาวน์โหลดไฟล์ PDF เอกสารการทดลองขับ',
+    description: 'ดาวน์โหลดไฟล์ PDF เอกสารฉบับสมบูรณ์',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'ดาวน์โหลด PDF สำเร็จ',
+    content: {
+      'application/pdf': {
+        schema: {
+          type: 'string',
+          format: 'binary',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'ข้อมูลไม่ได้เป็นของแบรนด์นี้',
+  })
+  @ApiResponse({ status: 404, description: 'ไม่พบเอกสารหรือ PDF ยังไม่พร้อม' })
+  @ApiParam({ name: 'brandCode', description: 'Brand code (isuzu or byd)' })
+  @ApiParam({ name: 'id', description: 'Test Drive ID' })
+  async downloadDocument(
+    @BrandDecorator() brand: Brand,
+    @Param('id', ParseIntPipe) id: number,
+    @Res() res: Response,
+  ) {
+    const { buffer, filename } = await this.documentService.downloadPDF(
+      id,
+      brand.id,
+    );
+
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': buffer.length,
+    });
+
+    res.status(HttpStatus.OK).send(buffer);
   }
 }
