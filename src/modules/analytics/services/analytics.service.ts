@@ -4,7 +4,7 @@ import { Repository, Between, MoreThanOrEqual, LessThanOrEqual } from 'typeorm';
 import { Vehicle, VehicleStatus } from '../../stock/entities/vehicle.entity';
 import { Event } from '../../events/entities/event.entity';
 import { EventStatus } from '../../events/entities/event-status.enum';
-import { TestDrive } from '../../test-drive/entities/test-drive.entity';
+import { TestDrive, TestDriveStatus } from '../../test-drive/entities/test-drive.entity';  // ✅ เพิ่ม TestDriveStatus
 import { DashboardStatsDto } from '../dto/dashboard-stats.dto';
 import { VehicleStatsDto } from '../dto/vehicle-stats.dto';
 import { EventStatsDto } from '../dto/event-stats.dto';
@@ -56,7 +56,7 @@ export class AnalyticsService {
 
     const completedTestDrivesThisMonth = await this.testDriveRepository.count({
       where: {
-        status: 'completed',
+        status: TestDriveStatus.COMPLETED,  // ✅ ใช้ enum แทน string literal
         updatedAt: Between(firstDayOfMonth, lastDayOfMonth),
       },
     });
@@ -269,7 +269,7 @@ export class AnalyticsService {
       .where('testDrive.startTime >= :now', { now })
       .andWhere('testDrive.startTime <= :sevenDaysLater', { sevenDaysLater })
       .andWhere('testDrive.status IN (:...statuses)', {
-        statuses: ['pending', 'ongoing']
+        statuses: [TestDriveStatus.PENDING, TestDriveStatus.ONGOING]  // ✅ ใช้ enum แทน string literals
       })
       .orderBy('testDrive.startTime', 'ASC')
       .limit(10)
@@ -371,10 +371,18 @@ export class AnalyticsService {
    */
   private async getTestDriveStatusSummary() {
     const total = await this.testDriveRepository.count();
-    const pending = await this.testDriveRepository.count({ where: { status: 'pending' } });
-    const ongoing = await this.testDriveRepository.count({ where: { status: 'ongoing' } });
-    const completed = await this.testDriveRepository.count({ where: { status: 'completed' } });
-    const cancelled = await this.testDriveRepository.count({ where: { status: 'cancelled' } });
+    const pending = await this.testDriveRepository.count({
+      where: { status: TestDriveStatus.PENDING }  // ✅ ใช้ enum แทน string literal
+    });
+    const ongoing = await this.testDriveRepository.count({
+      where: { status: TestDriveStatus.ONGOING }  // ✅ ใช้ enum แทน string literal
+    });
+    const completed = await this.testDriveRepository.count({
+      where: { status: TestDriveStatus.COMPLETED }  // ✅ ใช้ enum แทน string literal
+    });
+    const cancelled = await this.testDriveRepository.count({
+      where: { status: TestDriveStatus.CANCELLED }  // ✅ ใช้ enum แทน string literal
+    });
 
     return {
       total,
