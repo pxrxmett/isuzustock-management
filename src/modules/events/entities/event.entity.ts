@@ -84,9 +84,10 @@ export class Event {
   @OneToMany(() => EventVehicle, (eventVehicle) => eventVehicle.event)
   eventVehicles: EventVehicle[];
 
-  @CreateDateColumn()
+  // Timestamps - database uses camelCase (createdAt, updatedAt) with datetime(6)
+  @CreateDateColumn({ type: 'datetime', precision: 6, name: 'createdAt' })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ type: 'datetime', precision: 6, name: 'updatedAt' })
   updatedAt: Date;
 }

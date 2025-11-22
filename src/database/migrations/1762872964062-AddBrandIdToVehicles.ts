@@ -4,7 +4,7 @@ export class AddBrandIdToVehicles1762872964062 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     // Add brand_id column with default value 1 (ISUZU) for existing data
     await queryRunner.addColumn(
-      'vehicles',
+      'vehicle',  // ✅ แก้เป็น singular (ไม่มี s)
       new TableColumn({
         name: 'brand_id',
         type: 'int',
@@ -16,7 +16,7 @@ export class AddBrandIdToVehicles1762872964062 implements MigrationInterface {
 
     // Create index for brand_id
     await queryRunner.createIndex(
-      'vehicles',
+      'vehicle',  // ✅ แก้เป็น singular (ไม่มี s)
       new TableIndex({
         name: 'IDX_VEHICLE_BRAND_ID',
         columnNames: ['brand_id'],
@@ -25,7 +25,7 @@ export class AddBrandIdToVehicles1762872964062 implements MigrationInterface {
 
     // Create composite index for brand_id + status (for faster filtering)
     await queryRunner.createIndex(
-      'vehicles',
+      'vehicle',  // ✅ แก้เป็น singular (ไม่มี s)
       new TableIndex({
         name: 'IDX_VEHICLE_BRAND_STATUS',
         columnNames: ['brand_id', 'status'],
@@ -34,9 +34,9 @@ export class AddBrandIdToVehicles1762872964062 implements MigrationInterface {
 
     // Add foreign key constraint
     await queryRunner.createForeignKey(
-      'vehicles',
+      'vehicle',  // ✅ แก้เป็น singular (ไม่มี s)
       new TableForeignKey({
-        name: 'FK_VEHICLES_BRAND',
+        name: 'FK_VEHICLE_BRAND',  // ✅ แก้ชื่อ FK ด้วย
         columnNames: ['brand_id'],
         referencedTableName: 'brands',
         referencedColumnNames: ['id'],
@@ -48,13 +48,13 @@ export class AddBrandIdToVehicles1762872964062 implements MigrationInterface {
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     // Drop foreign key
-    await queryRunner.dropForeignKey('vehicles', 'FK_VEHICLES_BRAND');
+    await queryRunner.dropForeignKey('vehicle', 'FK_VEHICLE_BRAND');  // ✅ แก้เป็น singular
 
     // Drop indexes
-    await queryRunner.dropIndex('vehicles', 'IDX_VEHICLE_BRAND_STATUS');
-    await queryRunner.dropIndex('vehicles', 'IDX_VEHICLE_BRAND_ID');
+    await queryRunner.dropIndex('vehicle', 'IDX_VEHICLE_BRAND_STATUS');  // ✅ แก้เป็น singular
+    await queryRunner.dropIndex('vehicle', 'IDX_VEHICLE_BRAND_ID');  // ✅ แก้เป็น singular
 
     // Drop column
-    await queryRunner.dropColumn('vehicles', 'brand_id');
+    await queryRunner.dropColumn('vehicle', 'brand_id');  // ✅ แก้เป็น singular
   }
 }
