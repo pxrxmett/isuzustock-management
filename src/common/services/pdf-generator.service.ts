@@ -1,7 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
-import PdfPrinter from 'pdfmake';
-import { TDocumentDefinitions, TFontDictionary, Content } from 'pdfmake/interfaces';
-import * as path from 'path';
+import { TDocumentDefinitions, Content } from 'pdfmake/interfaces';
+
+// ✅ Use CommonJS require() for pdfmake (fixes ES module issue in production)
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const PdfMake = require('pdfmake/build/pdfmake');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const PdfFonts = require('pdfmake/build/vfs_fonts');
+
+// Configure pdfmake with fonts
+PdfMake.vfs = PdfFonts.pdfMake.vfs;
 
 /**
  * Interface สำหรับข้อมูลเอกสารการทดลองขับ
@@ -47,9 +54,11 @@ export interface TestDriveDocumentData {
  *
  * Features:
  * - สร้าง PDF จากข้อมูลเอกสาร
- * - รองรับภาษาไทย (THSarabunNew font)
+ * - รองรับภาษาไทย (ใช้ Roboto font ชั่วคราว)
  * - รองรับรูปภาพ (ใบขับขี่, ลายเซ็น)
  * - Layout ตามฟอร์มการทดลองขับมาตรฐาน
+ *
+ * NOTE: ใช้ CommonJS require() เพื่อแก้ปัญหา ES module ใน production
  */
 @Injectable()
 export class PDFGeneratorService {
@@ -67,63 +76,12 @@ export class PDFGeneratorService {
     try {
       this.logger.log('🔧 Generating test drive document PDF...');
 
-      // กำหนด fonts (ใช้ system fonts)
-      // TODO: เพิ่ม THSarabunNew font สำหรับภาษาไทย
-      const fonts: TFontDictionary = {
-        THSarabunNew: {
-          normal: path.join(
-            process.cwd(),
-            'fonts',
-            'THSarabunNew',
-            'THSarabunNew.ttf',
-          ),
-          bold: path.join(
-            process.cwd(),
-            'fonts',
-            'THSarabunNew',
-            'THSarabunNew Bold.ttf',
-          ),
-          italics: path.join(
-            process.cwd(),
-            'fonts',
-            'THSarabunNew',
-            'THSarabunNew Italic.ttf',
-          ),
-          bolditalics: path.join(
-            process.cwd(),
-            'fonts',
-            'THSarabunNew',
-            'THSarabunNew BoldItalic.ttf',
-          ),
-        },
-        Roboto: {
-          normal: path.join(
-            __dirname,
-            '../../../node_modules/pdfmake/build/vfs_fonts.js',
-          ),
-          bold: path.join(
-            __dirname,
-            '../../../node_modules/pdfmake/build/vfs_fonts.js',
-          ),
-          italics: path.join(
-            __dirname,
-            '../../../node_modules/pdfmake/build/vfs_fonts.js',
-          ),
-          bolditalics: path.join(
-            __dirname,
-            '../../../node_modules/pdfmake/build/vfs_fonts.js',
-          ),
-        },
-      };
-
-      const printer = new PdfPrinter(fonts);
-
       // กำหนด document definition
       const docDefinition: TDocumentDefinitions = {
         pageSize: 'A4',
         pageMargins: [40, 60, 40, 60],
         defaultStyle: {
-          font: 'Roboto', // ใช้ Roboto ชั่วคราว (เปลี่ยนเป็น THSarabunNew ถ้ามี font file)
+          font: 'Roboto', // ใช้ Roboto (built-in font)
           fontSize: 12,
         },
         content: [
@@ -330,22 +288,19 @@ export class PDFGeneratorService {
         },
       };
 
-      // สร้าง PDF
-      const pdfDoc = printer.createPdfKitDocument(docDefinition);
+      // ✅ สร้าง PDF ด้วย pdfMake.createPdf() (ไม่ใช่ new PdfPrinter)
+      const pdfDocGenerator = PdfMake.createPdf(docDefinition);
 
-      // แปลง stream เป็น buffer
-      const chunks: Buffer[] = [];
-      return new Promise((resolve, reject) => {
-        pdfDoc.on('data', (chunk: Buffer) => chunks.push(chunk));
-        pdfDoc.on('end', () => {
-          const result = Buffer.concat(chunks);
+      // แปลง PDF เป็น buffer
+      return new Promise<Buffer>((resolve, reject) => {
+        pdfDocGenerator.getBuffer((buffer: Buffer) => {
           this.logger.log(
-            `✅ PDF generated successfully (${result.length} bytes)`,
+            `✅ PDF generated successfully (${buffer.length} bytes)`,
           );
-          resolve(result);
+          resolve(buffer);
+        }, (error: Error) => {
+          reject(error);
         });
-        pdfDoc.on('error', reject);
-        pdfDoc.end();
       });
     } catch (error) {
       this.logger.error(`❌ Failed to generate PDF:`, error);
