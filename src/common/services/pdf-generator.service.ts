@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
-import * as PdfPrinter from 'pdfmake';
-import { TDocumentDefinitions, TFontDictionary } from 'pdfmake/interfaces';
+import PdfPrinter from 'pdfmake';
+import { TDocumentDefinitions, TFontDictionary, Content } from 'pdfmake/interfaces';
 import * as path from 'path';
 
 /**
@@ -237,80 +237,80 @@ export class PDFGeneratorService {
 
           // รูปใบขับขี่
           ...(data.licenseImagePath
-            ? [
+            ? ([
                 {
                   text: 'ใบขับขี่',
                   style: 'subheader',
-                  margin: [0, 0, 0, 10],
+                  margin: [0, 0, 0, 10] as [number, number, number, number],
                 },
                 {
                   image: data.licenseImagePath,
                   width: 200,
                   alignment: 'center',
-                  margin: [0, 0, 0, 15],
+                  margin: [0, 0, 0, 15] as [number, number, number, number],
                 },
-              ]
+              ] as Content[])
             : []),
 
           // ลายเซ็น
           {
             text: 'ลายเซ็น',
             style: 'subheader',
-            margin: [0, 10, 0, 10],
-            pageBreak: data.licenseImagePath ? 'before' : undefined,
+            margin: [0, 10, 0, 10] as [number, number, number, number],
+            pageBreak: data.licenseImagePath ? ('before' as any) : undefined,
           },
           {
             columns: [
               {
                 stack: [
-                  { text: 'ลูกค้า:', margin: [0, 0, 0, 5] },
+                  { text: 'ลูกค้า:', margin: [0, 0, 0, 5] as [number, number, number, number] },
                   data.customerSignaturePath
                     ? {
                         image: data.customerSignaturePath,
                         width: 100,
                         height: 50,
                       }
-                    : { text: '_________________', alignment: 'center' },
+                    : { text: '_________________', alignment: 'center' as any },
                   {
                     text: '(                         )',
-                    alignment: 'center',
-                    margin: [0, 5, 0, 0],
+                    alignment: 'center' as any,
+                    margin: [0, 5, 0, 0] as [number, number, number, number],
                   },
                 ],
                 width: '33%',
               },
               {
                 stack: [
-                  { text: 'พนักงานขาย:', margin: [0, 0, 0, 5] },
+                  { text: 'พนักงานขาย:', margin: [0, 0, 0, 5] as [number, number, number, number] },
                   data.salesSignaturePath
                     ? {
                         image: data.salesSignaturePath,
                         width: 100,
                         height: 50,
                       }
-                    : { text: '_________________', alignment: 'center' },
+                    : { text: '_________________', alignment: 'center' as any },
                   {
                     text: '(                         )',
-                    alignment: 'center',
-                    margin: [0, 5, 0, 0],
+                    alignment: 'center' as any,
+                    margin: [0, 5, 0, 0] as [number, number, number, number],
                   },
                 ],
                 width: '33%',
               },
               {
                 stack: [
-                  { text: 'ผู้จัดการ:', margin: [0, 0, 0, 5] },
+                  { text: 'ผู้จัดการ:', margin: [0, 0, 0, 5] as [number, number, number, number] },
                   data.managerSignaturePath
                     ? {
                         image: data.managerSignaturePath,
                         width: 100,
                         height: 50,
                       }
-                    : { text: '_________________', alignment: 'center' },
+                    : { text: '_________________', alignment: 'center' as any },
                   {
                     text: '(                         )',
-                    alignment: 'center',
-                    margin: [0, 5, 0, 0],
+                    alignment: 'center' as any,
+                    margin: [0, 5, 0, 0] as [number, number, number, number],
                   },
                 ],
                 width: '33%',
