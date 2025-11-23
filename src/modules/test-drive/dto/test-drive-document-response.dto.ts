@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Expose } from 'class-transformer';
+import { Expose, Transform } from 'class-transformer';
 
 /**
  * DTO สำหรับ Response ของเอกสารการทดลองขับ
@@ -166,20 +166,32 @@ export class TestDriveDocumentResponseDto {
   endMileage?: string;
 
   @ApiProperty({
-    description: 'วันที่เริ่มทดลองขับ',
+    description: 'วันที่เริ่มทดลองขับ (format: yyyy-MM-dd)',
     example: '2025-11-24',
     required: false,
   })
   @Expose()
-  startDate?: Date;
+  @Transform(({ value }) => {
+    if (!value) return null;
+    if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+    const date = new Date(value);
+    return date.toISOString().split('T')[0]; // "yyyy-MM-dd"
+  })
+  startDate?: Date | string;
 
   @ApiProperty({
-    description: 'วันที่สิ้นสุดทดลองขับ',
+    description: 'วันที่สิ้นสุดทดลองขับ (format: yyyy-MM-dd)',
     example: '2025-11-24',
     required: false,
   })
   @Expose()
-  endDate?: Date;
+  @Transform(({ value }) => {
+    if (!value) return null;
+    if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+    const date = new Date(value);
+    return date.toISOString().split('T')[0]; // "yyyy-MM-dd"
+  })
+  endDate?: Date | string;
 
   // ไฟล์และรูปภาพ (URLs)
   @ApiProperty({

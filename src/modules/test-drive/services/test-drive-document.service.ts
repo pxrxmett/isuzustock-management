@@ -359,16 +359,31 @@ export class TestDriveDocumentService {
       template.vinNumber = testDrive.vehicle.vinNumber || '';
     }
 
-    // Auto-fill dates
-    template.startDate = testDrive.startTime || null;
-    template.endDate = testDrive.expectedEndTime || null;
+    // Auto-fill dates - แปลงเป็น "yyyy-MM-dd" สำหรับ HTML input[type="date"]
+    if (testDrive.startTime) {
+      const date = new Date(testDrive.startTime);
+      template.startDate = date as any; // Will be formatted in response
+    }
+    if (testDrive.expectedEndTime) {
+      const date = new Date(testDrive.expectedEndTime);
+      template.endDate = date as any; // Will be formatted in response
+    }
 
     // Default purpose
     template.purpose = 'testDrive';
 
     this.logger.log(`✅ Pre-filled template created for test drive ${testDriveId}`);
 
-    return template;
+    // Return plain object with formatted dates
+    return {
+      ...template,
+      startDate: template.startDate
+        ? new Date(template.startDate).toISOString().split('T')[0]
+        : null,
+      endDate: template.endDate
+        ? new Date(template.endDate).toISOString().split('T')[0]
+        : null,
+    } as TestDriveDocument;
   }
 
   /**
