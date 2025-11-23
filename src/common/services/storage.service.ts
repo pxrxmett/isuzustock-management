@@ -2,11 +2,12 @@ import { Injectable, Logger } from '@nestjs/common';
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
+import { IStorageService } from '../interfaces/storage.interface';
 
 /**
- * StorageService
+ * LocalStorageService (implements IStorageService)
  *
- * จัดการการเก็บไฟล์ (images, PDFs) ลงใน file system
+ * จัดการการเก็บไฟล์ (images, PDFs) ลงใน local file system
  * รองรับการแปลง base64 เป็นไฟล์
  *
  * Features:
@@ -16,11 +17,16 @@ import { v4 as uuidv4 } from 'uuid';
  * - รองรับ brand-scoped storage (แยกไฟล์ตาม brand)
  * - ส่งคืน URL ที่สามารถเข้าถึงได้
  *
- * NOTE: ใช้ /tmp directory สำหรับ Railway (ephemeral storage)
- * TODO: รองรับ S3/Cloud Storage ในอนาคต
+ * Current Usage:
+ * - Development: ./public/uploads
+ * - Production (Railway): /tmp/uploads (ephemeral - files lost on restart)
+ *
+ * Migration Path:
+ * - Replace with S3StorageService for persistent cloud storage
+ * - See: src/common/services/s3-storage.service.ts (prepared for future)
  */
 @Injectable()
-export class StorageService {
+export class StorageService implements IStorageService {
   private readonly logger = new Logger(StorageService.name);
   // ใช้ /tmp สำหรับ Railway (มี permission เขียนได้)
   private readonly uploadDir = process.env.NODE_ENV === 'production'
@@ -199,6 +205,23 @@ export class StorageService {
     } catch (error) {
       this.logger.error(`❌ Failed to read file:`, error);
       throw new Error(`Failed to read file: ${error.message}`);
+    }
+  }
+
+  /**
+   * ตรวจสอบว่าไฟล์มีอยู่หรือไม่
+   *
+   * @param fileUrl - URL ของไฟล์
+   * @returns true ถ้าไฟล์มีอยู่, false ถ้าไม่มี
+   */
+  async fileExists(fileUrl: string): Promise<boolean> {
+    try {
+      const relativePath = fileUrl.replace(`${this.baseUrl}/uploads/`, '');
+      const filePath = path.join(this.uploadDir, relativePath);
+      await fs.access(filePath);
+      return true;
+    } catch {
+      return false;
     }
   }
 }
