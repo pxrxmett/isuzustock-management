@@ -7,8 +7,8 @@ const PdfMake = require('pdfmake/build/pdfmake');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const PdfFonts = require('pdfmake/build/vfs_fonts');
 
-// Configure pdfmake with fonts
-PdfMake.vfs = PdfFonts.pdfMake.vfs;
+// Configure pdfmake with fonts (vfs_fonts exports fonts object directly)
+PdfMake.addVirtualFileSystem(PdfFonts);
 
 /**
  * Interface สำหรับข้อมูลเอกสารการทดลองขับ
