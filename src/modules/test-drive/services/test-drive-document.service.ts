@@ -303,22 +303,72 @@ export class TestDriveDocumentService {
 
   /**
    * ดึงข้อมูลเอกสาร
+   * ถ้ายังไม่มีเอกสาร จะ return pre-filled template จาก test drive data
    */
   async findOne(
     testDriveId: number,
     brandId: number,
   ): Promise<TestDriveDocument> {
-    const document = await this.documentRepository.findOne({
+    // 1. หาเอกสารที่มีอยู่
+    let document = await this.documentRepository.findOne({
       where: { testDriveId, brandId },
     });
 
-    if (!document) {
+    // 2. ถ้ามีเอกสารแล้ว return
+    if (document) {
+      return document;
+    }
+
+    // 3. ถ้ายังไม่มีเอกสาร ดึง test drive data มา pre-fill
+    this.logger.log(
+      `Document not found, creating pre-filled template for test drive ${testDriveId}`,
+    );
+
+    const testDrive = await this.testDriveRepository.findOne({
+      where: { id: testDriveId },
+      relations: ['vehicle', 'vehicle.brand', 'staff'],
+    });
+
+    if (!testDrive) {
       throw new NotFoundException(
-        `Document not found for test drive ${testDriveId}`,
+        `Test drive with ID ${testDriveId} not found`,
       );
     }
 
-    return document;
+    // 4. สร้าง template document (ยังไม่ save ลง DB)
+    const template = new TestDriveDocument();
+    template.testDriveId = testDriveId;
+    template.brandId = brandId;
+
+    // Auto-fill จาก staff
+    if (testDrive.staff) {
+      template.salesSpecialist = testDrive.staff.fullName || '';
+      template.salesTel = testDrive.staff.phone || '';
+    }
+
+    // Auto-fill จาก customer
+    template.customerName = testDrive.customerName || '';
+    template.customerTel = testDrive.customerPhone || '';
+
+    // Auto-fill จาก vehicle
+    if (testDrive.vehicle) {
+      template.vehicleBrand = testDrive.vehicle.brand?.name || '';
+      template.vehicleModel = testDrive.vehicle.model || '';
+      template.vehicleType = testDrive.vehicle.carType || '';
+      template.vehicleColor = testDrive.vehicle.color || '';
+      template.vinNumber = testDrive.vehicle.vinNumber || '';
+    }
+
+    // Auto-fill dates
+    template.startDate = testDrive.startTime || null;
+    template.endDate = testDrive.expectedEndTime || null;
+
+    // Default purpose
+    template.purpose = 'testDrive';
+
+    this.logger.log(`✅ Pre-filled template created for test drive ${testDriveId}`);
+
+    return template;
   }
 
   /**
