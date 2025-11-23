@@ -241,19 +241,26 @@ export class BrandTestDriveController {
 
   @Get(':id/document')
   @ApiOperation({
-    summary: 'ดึงข้อมูลเอกสารการทดลองขับ',
-    description: 'ดูข้อมูลเอกสารพร้อม URL ของ PDF และรูปภาพทั้งหมด',
+    summary: 'ดึงข้อมูลเอกสารการทดลองขับ (Auto-fill)',
+    description:
+      'ถ้ามีเอกสารแล้ว → ดูข้อมูลเอกสารพร้อม URL ของ PDF และรูปภาพทั้งหมด\n\n' +
+      'ถ้ายังไม่มีเอกสาร → ระบบจะ auto-fill ข้อมูลจาก Test Drive และ Vehicle มาให้:\n' +
+      '- ข้อมูลพนักงานขาย (จาก Staff)\n' +
+      '- ข้อมูลลูกค้า (ชื่อ, เบอร์โทร)\n' +
+      '- ข้อมูลรถ (ยี่ห้อ, รุ่น, สี, VIN)\n' +
+      '- วันที่ (startDate, endDate)\n\n' +
+      'เซลไม่ต้องกรอกข้อมูลซ้ำ แค่เติมที่เหลือ (เลขบัตร, ที่อยู่, เลขไมล์, รูปภาพ)',
   })
   @ApiResponse({
     status: 200,
-    description: 'พบข้อมูลเอกสาร',
+    description: 'พบข้อมูลเอกสาร หรือ pre-filled template',
     type: TestDriveDocumentResponseDto,
   })
   @ApiResponse({
     status: 403,
     description: 'ข้อมูลไม่ได้เป็นของแบรนด์นี้',
   })
-  @ApiResponse({ status: 404, description: 'ไม่พบเอกสาร' })
+  @ApiResponse({ status: 404, description: 'ไม่พบ Test Drive' })
   @ApiParam({ name: 'brandCode', description: 'Brand code (isuzu or byd)' })
   @ApiParam({ name: 'id', description: 'Test Drive ID' })
   async getDocument(

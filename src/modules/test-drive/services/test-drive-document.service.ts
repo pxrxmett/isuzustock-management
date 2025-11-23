@@ -159,7 +159,8 @@ export class TestDriveDocumentService {
   }
 
   /**
-   * อัปเดตเอกสารการทดลองขับ
+   * อัปเดตเอกสารการทดลองขับ (Upsert Pattern)
+   * ถ้ายังไม่มีเอกสารจะสร้างใหม่, ถ้ามีอยู่แล้วจะอัปเดต
    */
   async update(
     testDriveId: number,
@@ -169,21 +170,40 @@ export class TestDriveDocumentService {
   ): Promise<TestDriveDocument> {
     try {
       this.logger.log(
-        `Updating document for test drive ${testDriveId} (brand: ${brandCode})`,
+        `Updating/Creating document for test drive ${testDriveId} (brand: ${brandCode})`,
       );
 
       // 1. ค้นหา document ที่มีอยู่
-      const document = await this.documentRepository.findOne({
+      let document = await this.documentRepository.findOne({
         where: { testDriveId, brandId },
       });
 
+      // 2. ถ้ายังไม่มีเอกสาร ให้สร้างใหม่ (Upsert Pattern)
       if (!document) {
-        throw new NotFoundException(
-          `Document not found for test drive ${testDriveId}`,
+        this.logger.log(
+          `Document not found, creating new document for test drive ${testDriveId}`,
         );
+
+        // Validate that test drive exists
+        const testDrive = await this.testDriveRepository.findOne({
+          where: { id: testDriveId },
+          relations: ['vehicle'],
+        });
+
+        if (!testDrive) {
+          throw new NotFoundException(
+            `Test drive with ID ${testDriveId} not found`,
+          );
+        }
+
+        // Create new document
+        document = this.documentRepository.create({
+          testDriveId,
+          brandId,
+        });
       }
 
-      // 2. อัปเดตข้อมูล
+      // 3. อัปเดตข้อมูล
       if (dto.salesSpecialist !== undefined)
         document.salesSpecialist = dto.salesSpecialist;
       if (dto.tel !== undefined) document.salesTel = dto.tel;
@@ -211,7 +231,7 @@ export class TestDriveDocumentService {
         document.startDate = new Date(dto.startDate);
       if (dto.endDate !== undefined) document.endDate = new Date(dto.endDate);
 
-      // 3. อัปเดตรูปภาพ (ถ้ามี)
+      // 4. อัปเดตรูปภาพ (ถ้ามี)
       if (dto.licenseImage) {
         // ลบไฟล์เก่า
         if (document.licenseImageUrl) {
@@ -264,15 +284,15 @@ export class TestDriveDocumentService {
           );
       }
 
-      // 4. บันทึกการเปลี่ยนแปลง
+      // 5. บันทึกการเปลี่ยนแปลง
       const updatedDocument = await this.documentRepository.save(document);
 
-      // 5. สร้าง PDF ใหม่ (async)
+      // 6. สร้าง PDF ใหม่ (async)
       this.generateAndSavePDF(updatedDocument, brandCode).catch((error) => {
         this.logger.error(`Failed to regenerate PDF:`, error);
       });
 
-      this.logger.log(`✅ Document updated successfully (ID: ${document.id})`);
+      this.logger.log(`✅ Document updated/created successfully (ID: ${document.id})`);
 
       return updatedDocument;
     } catch (error) {
@@ -283,22 +303,72 @@ export class TestDriveDocumentService {
 
   /**
    * ดึงข้อมูลเอกสาร
+   * ถ้ายังไม่มีเอกสาร จะ return pre-filled template จาก test drive data
    */
   async findOne(
     testDriveId: number,
     brandId: number,
   ): Promise<TestDriveDocument> {
-    const document = await this.documentRepository.findOne({
+    // 1. หาเอกสารที่มีอยู่
+    let document = await this.documentRepository.findOne({
       where: { testDriveId, brandId },
     });
 
-    if (!document) {
+    // 2. ถ้ามีเอกสารแล้ว return
+    if (document) {
+      return document;
+    }
+
+    // 3. ถ้ายังไม่มีเอกสาร ดึง test drive data มา pre-fill
+    this.logger.log(
+      `Document not found, creating pre-filled template for test drive ${testDriveId}`,
+    );
+
+    const testDrive = await this.testDriveRepository.findOne({
+      where: { id: testDriveId },
+      relations: ['vehicle', 'vehicle.brand', 'staff'],
+    });
+
+    if (!testDrive) {
       throw new NotFoundException(
-        `Document not found for test drive ${testDriveId}`,
+        `Test drive with ID ${testDriveId} not found`,
       );
     }
 
-    return document;
+    // 4. สร้าง template document (ยังไม่ save ลง DB)
+    const template = new TestDriveDocument();
+    template.testDriveId = testDriveId;
+    template.brandId = brandId;
+
+    // Auto-fill จาก staff
+    if (testDrive.staff) {
+      template.salesSpecialist = testDrive.staff.fullName || '';
+      template.salesTel = testDrive.staff.phone || '';
+    }
+
+    // Auto-fill จาก customer
+    template.customerName = testDrive.customerName || '';
+    template.customerTel = testDrive.customerPhone || '';
+
+    // Auto-fill จาก vehicle
+    if (testDrive.vehicle) {
+      template.vehicleBrand = testDrive.vehicle.brand?.name || '';
+      template.vehicleModel = testDrive.vehicle.model || '';
+      template.vehicleType = testDrive.vehicle.carType || '';
+      template.vehicleColor = testDrive.vehicle.color || '';
+      template.vinNumber = testDrive.vehicle.vinNumber || '';
+    }
+
+    // Auto-fill dates
+    template.startDate = testDrive.startTime || null;
+    template.endDate = testDrive.expectedEndTime || null;
+
+    // Default purpose
+    template.purpose = 'testDrive';
+
+    this.logger.log(`✅ Pre-filled template created for test drive ${testDriveId}`);
+
+    return template;
   }
 
   /**
