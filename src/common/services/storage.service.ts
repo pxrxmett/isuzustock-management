@@ -16,12 +16,16 @@ import { v4 as uuidv4 } from 'uuid';
  * - รองรับ brand-scoped storage (แยกไฟล์ตาม brand)
  * - ส่งคืน URL ที่สามารถเข้าถึงได้
  *
+ * NOTE: ใช้ /tmp directory สำหรับ Railway (ephemeral storage)
  * TODO: รองรับ S3/Cloud Storage ในอนาคต
  */
 @Injectable()
 export class StorageService {
   private readonly logger = new Logger(StorageService.name);
-  private readonly uploadDir = path.join(process.cwd(), 'public', 'uploads');
+  // ใช้ /tmp สำหรับ Railway (มี permission เขียนได้)
+  private readonly uploadDir = process.env.NODE_ENV === 'production'
+    ? '/tmp/uploads'
+    : path.join(process.cwd(), 'public', 'uploads');
   private readonly baseUrl = process.env.API_BASE_URL || 'http://localhost:3000';
 
   constructor() {
