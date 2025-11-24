@@ -111,4 +111,14 @@ export class CreateTestDriveDto {
   @IsOptional()
   @IsNumber()
   brand_id?: number;
+  
+   // ✅ เพิ่ม notes
+  @ApiPropertyOptional({
+    example: 'ลูกค้าต้องการทดลองเส้นทางรอบโรงงาน 2 รอบ',
+    description: 'โน้ตเพิ่มเติม',
+    type: String,
+  })
+  @IsOptional()
+  @IsString()
+  notes?: string;
 }
